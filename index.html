@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>79G 雷達設定</title>
+<meta name="description" content="79G 柵欄機雷達藍牙設定工具">
+<meta name="theme-color" content="#1565c0">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{
+  --bg:#f3f5f8; --card:#ffffff; --text:#1b1f24; --muted:#5f6b7a; --line:#dde3ea;
+  --accent:#1565c0; --accent-ink:#ffffff; --accent-soft:#e3eefb;
+  --danger:#c62828; --danger-soft:#fdecea; --ok:#2e7d32; --warn:#8a5a00; --warn-soft:#fff4dc;
+  --radius:14px;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#11151a; --card:#1a2028; --text:#e8edf3; --muted:#9aa7b6; --line:#2b3440;
+    --accent:#5aa2f0; --accent-ink:#0b1420; --accent-soft:#1d3047;
+    --danger:#ef6b6b; --danger-soft:#3a1f22; --ok:#6cc070; --warn:#f0c060; --warn-soft:#3a3020;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);
+  font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",system-ui,sans-serif;font-size:16px;line-height:1.5}
+body{padding-bottom:96px}
+header{display:flex;align-items:center;gap:12px;padding:16px 16px 8px;max-width:640px;margin:0 auto}
+header img{height:40px;width:auto}
+header h1{font-size:20px;margin:0;font-weight:700}
+main{max-width:640px;margin:0 auto;padding:0 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin:12px 0}
+.card h2{font-size:16px;margin:0 0 12px;font-weight:700}
+.banner{border-radius:var(--radius);padding:12px 14px;margin:12px 0;font-size:15px}
+.banner.warn{background:var(--warn-soft);color:var(--warn)}
+.banner.danger{background:var(--danger-soft);color:var(--danger)}
+.row{padding:12px 0;border-top:1px solid var(--line)}
+.row:first-of-type{border-top:0;padding-top:0}
+.row .label{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px;font-weight:600}
+.row .hint{font-size:13px;color:var(--muted);font-weight:400}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button{flex:1 1 0;min-width:72px;min-height:44px;border:1px solid var(--line);background:var(--bg);color:var(--text);
+  border-radius:10px;font:inherit;font-size:15px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:700}
+.stepper{display:flex;align-items:center;gap:10px}
+.stepper button{width:48px;height:44px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text);font-size:22px;cursor:pointer}
+.stepper .val{min-width:96px;text-align:center;font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--accent);margin-top:6px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:48px;padding:0 18px;border-radius:12px;
+  border:1px solid var(--line);background:var(--card);color:var(--text);font:inherit;font-weight:600;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.danger{color:var(--danger);border-color:var(--danger)}
+.btn.block{width:100%}
+.btn:disabled,.seg button:disabled,.stepper button:disabled{opacity:.45;cursor:not-allowed}
+.status{font-size:14px;color:var(--muted);margin-top:8px;min-height:1.5em}
+.status.ok{color:var(--ok)} .status.err{color:var(--danger)}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+.btnrow .btn{flex:1 1 140px}
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);
+  padding:10px 16px calc(10px + env(safe-area-inset-bottom))}
+.bar .inner{max-width:640px;margin:0 auto;display:flex;gap:8px}
+.bar .btn{flex:1}
+details{margin:12px 0}
+summary{cursor:pointer;color:var(--muted);font-size:14px}
+pre{white-space:pre-wrap;word-break:break-all;font-size:12px;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px;max-height:260px;overflow:auto}
+.hidden{display:none!important}
+.toast{position:fixed;left:50%;bottom:92px;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:10px 16px;border-radius:10px;
+  font-size:15px;max-width:calc(100% - 32px);z-index:10;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.show{opacity:1}
+.note{font-size:13px;color:var(--muted);margin-top:8px}
+dialog{border:0;border-radius:var(--radius);background:var(--card);color:var(--text);padding:20px;width:min(360px,calc(100% - 32px))}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+dialog h3{margin:0 0 8px;font-size:18px}
+dialog p{margin:0 0 16px;white-space:pre-line}
+dialog input{width:100%;font:inherit;font-size:20px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text);margin-bottom:16px;letter-spacing:4px;text-align:center}
+</style>
+</head>
+<body>
+<header>
+  <img id="logo" src="logo.png" alt="" onerror="this.remove()">
+  <h1>79G 雷達設定</h1>
+</header>
+<main>
+  <div id="unsupported" class="banner danger hidden">
+    這個瀏覽器不能使用藍牙。<br>
+    請用 <b>Android 手機的 Chrome</b> 開啟這個網址。<br>
+    從 LINE 或微信打開的話，請點右上角「⋮」選「用 Chrome 開啟」或「以瀏覽器開啟」。iPhone 目前不支援。
+  </div>
+
+  <section class="card">
+    <h2>連線</h2>
+    <button id="btnConnect" class="btn primary block">連接雷達</button>
+    <div id="connStatus" class="status">請打開手機藍牙，靠近雷達後按「連接雷達」。</div>
+    <div id="devInfo" class="note hidden"></div>
+  </section>
+
+  <section class="card" id="basicCard">
+    <h2>基本設定</h2>
+    <div class="row">
+      <div class="label">道閘桿類型</div>
+      <div class="seg" data-field="PoleType" data-options='[[1,"直桿"],[2,"柵欄桿"],[3,"折疊桿"]]'></div>
+    </div>
+    <div class="row">
+      <div class="label">桿長 <span class="hint">公尺</span></div>
+      <div class="stepper" data-field="PoleLengthCm" data-min="100" data-max="600" data-step="10" data-scale="100" data-dp="1" data-unit=" m" data-range="1"></div>
+    </div>
+    <div class="row">
+      <div class="label">固定方式 <span class="hint">雷達裝在桿子的哪一側</span></div>
+      <div class="seg" data-field="Fixation" data-options='[[1,"左"],[2,"右"]]'></div>
+    </div>
+    <div class="row">
+      <div class="label">過車類型</div>
+      <div class="seg" data-field="VehicleMs" data-options='[[1500,"小型車"],[1800,"混合"],[3000,"大型車"]]'></div>
+    </div>
+    <div class="row">
+      <div class="label">人車區分 <span class="hint">開啟後偵測到人會亮黃燈</span></div>
+      <div class="seg" data-field="JudgeSwitch" data-options='[[0,"關閉"],[1,"開啟"]]'></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>學習</h2>
+    <div class="btnrow">
+      <button class="btn" disabled>抬桿背景學習</button>
+      <button class="btn" disabled>桿起落學習</button>
+    </div>
+    <div class="note">學習功能準備中，下一版提供。</div>
+  </section>
+
+  <section class="card">
+    <h2>進階設定</h2>
+    <div id="advLocked">
+      <div class="note" style="margin:0 0 12px">進階設定僅限安裝人員修改。</div>
+      <button id="btnUnlock" class="btn block">安裝人員解鎖</button>
+    </div>
+    <div id="advPanel" class="hidden">
+      <div class="banner warn" style="margin-top:0">請在專業人員指導下修改，設錯可能有砸車風險。</div>
+      <div class="row">
+        <div class="label">行車方向 <span class="hint">車從雷達哪一側進入</span></div>
+        <div class="seg" data-field="PassDirection" data-options='[[1,"左"],[2,"右"],[3,"雙向"]]'></div>
+      </div>
+      <div class="row">
+        <div class="label">繼電器狀態</div>
+        <div class="seg" data-field="RelayMode" data-options='[[0,"常開"],[1,"常閉"]]'></div>
+      </div>
+      <div class="row">
+        <div class="label">延遲落桿時間</div>
+        <div class="stepper" data-field="DropDelayMs" data-min="0" data-max="10000" data-step="500" data-scale="1000" data-dp="1" data-unit=" 秒"></div>
+      </div>
+      <div class="row">
+        <div class="label">臨近不檢測距離</div>
+        <div class="stepper" data-field="NearCm" data-min="0" data-max="100" data-step="10" data-scale="1" data-dp="0" data-unit=" 公分"></div>
+      </div>
+      <div class="row">
+        <div class="label">左側檢測寬度</div>
+        <div class="stepper" data-field="LeftWidthCm" data-min="0" data-max="150" data-step="10" data-scale="1" data-dp="0" data-unit=" 公分"></div>
+      </div>
+      <div class="row">
+        <div class="label">右側檢測寬度</div>
+        <div class="stepper" data-field="RightWidthCm" data-min="0" data-max="150" data-step="10" data-scale="1" data-dp="0" data-unit=" 公分"></div>
+      </div>
+      <div class="row">
+        <div class="label">藍牙自動關閉 <span class="hint">開啟後要斷電再上電才連得上</span></div>
+        <div class="seg" data-field="BleAutoOff" data-options='[[0,"關閉"],[1,"開啟"]]'></div>
+      </div>
+      <div class="row">
+        <div class="label">雷達維護</div>
+        <div class="btnrow">
+          <button id="btnReboot" class="btn">重啟雷達</button>
+          <button id="btnReset" class="btn danger">恢復出廠值</button>
+        </div>
+      </div>
+      <button id="btnLock" class="btn block" style="margin-top:8px">鎖定進階設定</button>
+    </div>
+  </section>
+
+  <details>
+    <summary>通訊紀錄（給技術人員看）</summary>
+    <pre id="log"></pre>
+  </details>
+</main>
+
+<div class="bar">
+  <div class="inner">
+    <button id="btnRead" class="btn" disabled>讀取設定</button>
+    <button id="btnSave" class="btn primary" disabled>儲存設定</button>
+  </div>
+</div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<dialog id="dlg">
+  <h3 id="dlgTitle"></h3>
+  <p id="dlgText"></p>
+  <input id="dlgInput" type="password" inputmode="numeric" autocomplete="off" class="hidden">
+  <div class="btnrow">
+    <button id="dlgCancel" class="btn" value="cancel">取消</button>
+    <button id="dlgOk" class="btn primary" value="ok">確定</button>
+  </div>
+</dialog>
+
+<script>
+"use strict";
+// ===== Settings you may change =====
+const INSTALLER_PIN = "8888";        // 安裝人員密碼（進階設定）
+// ===================================
+
+const SVC = 0xae30, CH_WRITE = 0xae01, CH_NOTIFY = 0xae02;
+const PROMPT_RX = /\S+:\/>\s*$/;
+const $ = id => document.getElementById(id);
+
+// ---------- radar link over Web Bluetooth ----------
+class RadarLink {
+  constructor(){ this.dev = null; this.wr = null; this.buf = ""; this.wake = null; this.chain = Promise.resolve(); this.onLog = () => {}; this.onDisconnect = () => {}; }
+  get connected(){ return !!(this.dev && this.dev.gatt && this.dev.gatt.connected && this.wr); }
+  async choose(){
+    this.dev = await navigator.bluetooth.requestDevice({
+      filters: [{ namePrefix: "79G" }, { services: [SVC] }],
+      optionalServices: [SVC],
+    });
+    this.dev.addEventListener("gattserverdisconnected", () => { this.wr = null; this.onDisconnect(); });
+  }
+  async open(){
+    const server = await this.dev.gatt.connect();
+    const svc = await server.getPrimaryService(SVC);
+    this.wr = await svc.getCharacteristic(CH_WRITE);
+    const nt = await svc.getCharacteristic(CH_NOTIFY);
+    nt.addEventListener("characteristicvaluechanged", e => {
+      const s = new TextDecoder().decode(e.target.value);
+      this.buf += s; this.onLog(s, false);
+      if (this.wake) this.wake();
+    });
+    await nt.startNotifications();
+    await sleep(400);      // the radar answers the subscribe with "Error -1" + prompt; let it pass
+    this.buf = "";
+  }
+  close(){ try { if (this.dev && this.dev.gatt.connected) this.dev.gatt.disconnect(); } catch(e){} this.wr = null; }
+  // one command at a time
+  send(cmd, opt = {}){
+    const p = this.chain.then(() => this._send(cmd, opt));
+    this.chain = p.catch(() => {});
+    return p;
+  }
+  async _send(cmd, { timeout = 5000, wait = true } = {}){
+    if (!this.connected) throw new Error("尚未連線");
+    this.buf = "";
+    this.onLog(cmd, true);
+    const bytes = new TextEncoder().encode(cmd + "\n");
+    for (let i = 0; i < bytes.length; i += 20) {
+      const part = bytes.slice(i, i + 20);
+      if (this.wr.writeValueWithoutResponse) await this.wr.writeValueWithoutResponse(part);
+      else await this.wr.writeValue(part);
+    }
+    if (!wait) { await sleep(800); return { ok: true, text: this.buf }; }
+    const end = Date.now() + timeout;
+    for (;;) {
+      const t = this.buf;
+      if ((t.includes("Done") || t.includes("Error")) && PROMPT_RX.test(t))
+        return { ok: t.includes("Done") && !/Error\s*-?\d/.test(t), text: t };
+      const left = end - Date.now();
+      if (left <= 0) return { ok: t.includes("Done"), text: t, timedOut: true };
+      await new Promise(r => { this.wake = r; setTimeout(r, Math.min(left, 200)); });
+      this.wake = null;
+    }
+  }
+}
+
+// ---------- config parse / diff (same rules as the PC tool) ----------
+function parseConfig(text){
+  const c = { CutAreas: [] };
+  for (const raw of text.replace(/\r/g, "").split("\n")) {
+    const m = raw.match(/^\s*([A-Za-z_][A-Za-z_ ]*?(?:\s*\[\d\])?)\s*:\s*(.*?)\s*$/);
+    if (!m) continue;
+    const key = m[1].replace(/\s+/g, " ").trim();
+    const v = m[2].split(/\s+/).filter(Boolean);
+    const n = i => (i < v.length && !isNaN(parseFloat(v[i]))) ? Math.round(parseFloat(v[i])) : null;
+    switch (key) {
+      case "Pole Length": c.PoleLengthCm = n(0); break;
+      case "GatePole Type": c.PoleType = n(0); break;
+      case "Gate Fixation": c.Fixation = n(0); break;
+      case "Direction Ctrl": c.PassDirection = n(0); break;
+      case "Judge Switch": c.JudgeSwitch = n(0); break;
+      case "GateRelay Ctrl": c.RelayMode = n(0); break;
+      case "BleSwitchFlag": c.BleAutoOff = n(1); break;
+      case "GateTimeParam": c.VehicleMs = n(0); c.DropDelayMs = n(1); break;
+      case "YLimit Width": c.NearCm = n(0); break;
+      case "Left Width": c.LeftWidthCm = n(0); break;
+      case "Right Width": c.RightWidthCm = n(0); break;
+      default: { const cm = key.match(/^SetCutArea \[(\d)\]$/); if (cm) c.CutAreas[+cm[1] - 1] = v.join(" "); }
+    }
+  }
+  return c;
+}
+// pole type and length first: the radar recalculates widths when they change
+const FIELDS = [
+  ["PoleType", "道閘桿類型", v => `SetGatePoleType ${v}`],
+  ["PoleLengthCm", "桿長", v => `SetPoleLength ${v}`],
+  ["Fixation", "固定方式", v => `SimpleCfgCommon 6 2 ${v}`],
+  ["VehicleMs", "過車類型", v => `SimpleCfgCommon 7 2 ${v}`],
+  ["JudgeSwitch", "人車區分", v => `SetJudgeTarActive ${v}`],
+  ["PassDirection", "行車方向", v => `SetPassDirection ${v}`, true],
+  ["RelayMode", "繼電器狀態", v => `SetGateGPIOCtrl ${v}`, true],
+  ["DropDelayMs", "延遲落桿時間", v => `SimpleCfgCommon 8 2 ${v}`, true],
+  ["NearCm", "臨近不檢測距離", v => `SimpleCfgCommon 2 2 ${v}`, true],
+  ["LeftWidthCm", "左側檢測寬度", v => `SimpleCfgCommon 4 2 1 ${v}`, true],
+  ["RightWidthCm", "右側檢測寬度", v => `SimpleCfgCommon 4 2 2 ${v}`, true],
+  ["BleAutoOff", "藍牙自動關閉", v => `SetParas 4 2 ${v}`, true],
+];
+function diffConfig(from, to){
+  return FIELDS.filter(([k]) => to[k] != null && from[k] !== to[k])
+               .map(([k, label, cmd, adv]) => ({ key: k, label, cmd: cmd(to[k]), adv: !!adv }));
+}
+
+// ---------- UI state ----------
+const link = new RadarLink();
+let current = null, draft = null, busy = false;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+link.onLog = (s, tx) => {
+  const el = $("log");
+  el.textContent += tx ? `\n[${new Date().toLocaleTimeString("zh-TW", { hour12: false })}] >> ${s}\n` : s.replace(/\r/g, "");
+  if (el.textContent.length > 20000) el.textContent = el.textContent.slice(-15000);
+  el.scrollTop = el.scrollHeight;
+};
+link.onDisconnect = () => { if (!restarting) { setStatus("連線已中斷，請重新連接。", "err"); refresh(); } };
+
+function setStatus(t, kind){ const el = $("connStatus"); el.textContent = t; el.className = "status" + (kind ? " " + kind : ""); }
+let toastTimer;
+function toast(t){ const el = $("toast"); el.textContent = t; el.classList.add("show"); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove("show"), 2600); }
+
+function dialog(title, text, { input = false, okText = "確定", danger = false, cancel = true } = {}){
+  return new Promise(resolve => {
+    const d = $("dlg");
+    $("dlgTitle").textContent = title; $("dlgText").textContent = text;
+    const inp = $("dlgInput"); inp.value = ""; inp.classList.toggle("hidden", !input);
+    $("dlgOk").textContent = okText; $("dlgOk").className = "btn " + (danger ? "danger" : "primary");
+    $("dlgCancel").classList.toggle("hidden", !cancel);
+    const done = v => { d.close(); $("dlgOk").onclick = $("dlgCancel").onclick = null; resolve(v); };
+    $("dlgOk").onclick = () => done(input ? inp.value : true);
+    $("dlgCancel").onclick = () => done(input ? null : false);
+    d.oncancel = e => { e.preventDefault(); done(input ? null : false); };
+    d.showModal();
+    if (input) setTimeout(() => inp.focus(), 50);
+  });
+}
+
+// build the segmented buttons and steppers from data attributes
+function buildControls(){
+  document.querySelectorAll(".seg[data-field]").forEach(seg => {
+    const f = seg.dataset.field;
+    JSON.parse(seg.dataset.options).forEach(([val, text]) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.textContent = text; b.dataset.val = val;
+      b.onclick = () => { if (!draft) return; draft[f] = val; refresh(); };
+      seg.appendChild(b);
+    });
+  });
+  document.querySelectorAll(".stepper[data-field]").forEach(st => {
+    const f = st.dataset.field, min = +st.dataset.min, max = +st.dataset.max, step = +st.dataset.step;
+    const minus = document.createElement("button"), plus = document.createElement("button"), val = document.createElement("div");
+    minus.type = plus.type = "button"; minus.textContent = "−"; plus.textContent = "+"; val.className = "val";
+    minus.setAttribute("aria-label", "減少"); plus.setAttribute("aria-label", "增加");
+    const bump = d => { if (!draft || draft[f] == null) return; draft[f] = Math.min(max, Math.max(min, draft[f] + d)); refresh(); };
+    minus.onclick = () => bump(-step); plus.onclick = () => bump(step);
+    st.append(minus, val, plus);
+    if (st.dataset.range) {
+      const r = document.createElement("input");
+      r.type = "range"; r.min = min; r.max = max; r.step = step;
+      r.oninput = () => { if (!draft) return; draft[f] = +r.value; refresh(); };
+      st.after(r); st._range = r;
+    }
+  });
+}
+
+function refresh(){
+  const on = link.connected && !restarting;
+  const ready = on && !!draft && !busy;
+  document.querySelectorAll(".seg[data-field]").forEach(seg => {
+    const v = draft ? draft[seg.dataset.field] : null;
+    seg.querySelectorAll("button").forEach(b => { b.setAttribute("aria-pressed", String(v != null && +b.dataset.val === v)); b.disabled = !ready; });
+  });
+  document.querySelectorAll(".stepper[data-field]").forEach(st => {
+    const v = draft ? draft[st.dataset.field] : null;
+    st.querySelector(".val").textContent = v == null ? "—" : (v / +st.dataset.scale).toFixed(+st.dataset.dp) + st.dataset.unit;
+    st.querySelectorAll("button").forEach(b => b.disabled = !ready);
+    if (st._range) { st._range.disabled = !ready; if (v != null) st._range.value = v; }
+  });
+  const changes = current && draft ? diffConfig(current, draft) : [];
+  $("btnSave").disabled = !ready || changes.length === 0;
+  $("btnSave").textContent = changes.length ? `儲存設定（${changes.length} 項）` : "儲存設定";
+  $("btnRead").disabled = !on || busy;
+  $("btnReboot").disabled = $("btnReset").disabled = !on || busy;
+  $("btnConnect").textContent = on ? "中斷連線" : "連接雷達";
+  $("btnConnect").className = "btn block " + (on ? "" : "primary");
+  $("btnConnect").disabled = busy;
+}
+
+// ---------- actions ----------
+async function connect(){
+  if (link.connected) { link.close(); current = draft = null; $("devInfo").classList.add("hidden"); setStatus("已中斷連線。"); refresh(); return; }
+  busy = true; refresh();
+  try {
+    setStatus("請在跳出的清單選擇雷達（名稱以 79G 開頭）…");
+    await link.choose();
+    setStatus("連線中…");
+    await link.open();
+    await afterConnect();
+  } catch (e) {
+    if (e && e.name === "NotFoundError") setStatus("沒有選擇雷達。");
+    else setStatus("連線失敗：" + (e && e.message || e), "err");
+    link.close();
+  } finally { busy = false; refresh(); }
+}
+
+async function afterConnect(){
+  const ver = await link.send("GetSoftwareVersion");
+  const v = (ver.text.match(/VER:(\S+)/) || [])[1] || "", sn = (ver.text.match(/SN:(\S+)/) || [])[1] || "";
+  $("devInfo").textContent = `${link.dev.name || "雷達"}　韌體 ${v}　序號 ${sn}`;
+  $("devInfo").classList.remove("hidden");
+  await link.send(`SetParas 10 2 ${Math.floor(Date.now() / 1000)}`);   // sync the radar clock, like the original app
+  await readConfig(true);
+}
+
+async function readConfig(inner){
+  if (!inner) { busy = true; refresh(); }
+  try {
+    setStatus("讀取中…");
+    const r = await link.send("ReadRadeConfig 2", { timeout: 8000 });
+    if (!r.ok) throw new Error("雷達沒有回應");
+    current = parseConfig(r.text);
+    draft = { ...current };
+    setStatus("已連線，設定已讀取。", "ok");
+  } catch (e) { setStatus("讀取失敗：" + e.message, "err"); }
+  finally { if (!inner) { busy = false; } refresh(); }
+}
+
+async function save(){
+  const changes = diffConfig(current, draft);
+  if (!changes.length) return;
+  let msg = "將寫入：\n" + changes.map(c => "・" + c.label).join("\n");
+  if (changes.some(c => c.adv)) msg += "\n\n包含進階設定，設錯可能有砸車風險。";
+  if (draft.BleAutoOff === 1 && current.BleAutoOff !== 1) msg += "\n\n藍牙自動關閉開啟後，下次要先把雷達斷電再上電才連得上。";
+  if (!await dialog("儲存設定", msg, { okText: "寫入" })) return;
+  busy = true; refresh();
+  const failed = [];
+  try {
+    for (const c of changes) {
+      setStatus(`寫入${c.label}…`);
+      const r = await link.send(c.cmd);
+      if (!r.ok) failed.push(c.label);
+    }
+  } catch (e) { failed.push("通訊錯誤：" + e.message); }
+  await readConfig(true);
+  busy = false; refresh();
+  if (failed.length) await dialog("部分項目沒有寫入", failed.join("\n"), { cancel: false });
+  else toast(`已儲存 ${changes.length} 項`);
+}
+
+let restarting = false;
+async function restart(cmd, title, text){
+  if (!await dialog(title, text, { okText: title, danger: cmd !== "reboot" })) return;
+  busy = true; restarting = true; refresh();
+  try {
+    setStatus("雷達重新啟動中，請稍候約 10 秒…");
+    await link.send(cmd, { wait: false });
+    await sleep(6000);
+    for (let i = 0; i < 6 && !link.connected; i++) {
+      try { await link.open(); } catch (e) { await sleep(2500); }
+    }
+    if (!link.connected) throw new Error("請按「連接雷達」重新連線");
+    restarting = false;
+    await afterConnect();
+    toast(cmd === "reboot" ? "雷達已重啟" : "已恢復出廠值，請重新設定");
+  } catch (e) { setStatus("重新連線失敗：" + e.message, "err"); }
+  finally { restarting = false; busy = false; refresh(); }
+}
+
+async function unlock(){
+  const pin = await dialog("安裝人員解鎖", "請輸入安裝人員密碼。", { input: true, okText: "解鎖" });
+  if (pin == null) return;
+  if (pin !== INSTALLER_PIN) { toast("密碼錯誤"); return; }
+  setAdvanced(true);
+}
+function setAdvanced(on){
+  $("advLocked").classList.toggle("hidden", on); $("advPanel").classList.toggle("hidden", !on);
+  try { on ? sessionStorage.setItem("adv", "1") : sessionStorage.removeItem("adv"); } catch(e){}
+}
+
+// ---------- start ----------
+buildControls();
+$("btnConnect").onclick = connect;
+$("btnRead").onclick = () => readConfig(false);
+$("btnSave").onclick = save;
+$("btnUnlock").onclick = unlock;
+$("btnLock").onclick = () => setAdvanced(false);
+$("btnReboot").onclick = () => restart("reboot", "重啟雷達", "確定要重啟雷達嗎？");
+$("btnReset").onclick = () => restart("ResetRadeConfig", "恢復出廠值",
+  "所有設定（桿型、桿長、方向等）和學習資料都會清除，回到出廠值，之後需要重新設定。\n\n確定嗎？");
+try { if (sessionStorage.getItem("adv") === "1") setAdvanced(true); } catch(e){}
+if (!navigator.bluetooth) { $("unsupported").classList.remove("hidden"); $("btnConnect").disabled = true; }
+refresh();
+if (!navigator.bluetooth) $("btnConnect").disabled = true;
+if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>

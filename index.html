@@ -73,6 +73,12 @@ pre{white-space:pre-wrap;word-break:break-all;font-size:12px;background:var(--bg
 .note{font-size:13px;color:var(--muted);margin-top:8px}
 dialog{border:0;border-radius:var(--radius);background:var(--card);color:var(--text);padding:20px;width:min(360px,calc(100% - 32px))}
 dialog::backdrop{background:rgba(0,0,0,.45)}
+#lrn{text-align:center}
+#lrn svg{width:150px;height:110px;margin:4px auto 8px;display:block}
+#lrn .gate-box{fill:var(--muted)}
+#lrn .gate-boom{stroke:var(--danger);stroke-width:6;stroke-linecap:round;stroke-dasharray:10 8}
+.spinner{width:28px;height:28px;margin:0 auto 14px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 dialog h3{margin:0 0 8px;font-size:18px}
 dialog p{margin:0 0 16px;white-space:pre-line}
 dialog input{width:100%;font:inherit;font-size:20px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text);margin-bottom:16px;letter-spacing:4px;text-align:center}
@@ -124,10 +130,10 @@ dialog input{width:100%;font:inherit;font-size:20px;padding:10px;border-radius:1
   <section class="card">
     <h2>學習</h2>
     <div class="btnrow">
-      <button class="btn" disabled>抬桿背景學習</button>
-      <button class="btn" disabled>桿起落學習</button>
+      <button id="btnLearnBg" class="btn" disabled>抬桿背景學習</button>
+      <button id="btnLearnPole" class="btn" disabled>桿起落學習</button>
     </div>
-    <div class="note">學習功能準備中，下一版提供。</div>
+    <div class="note">雷達裝好、設定完成後各做一次。學習時人車不要進入雷達左右各 2 公尺範圍內，並準備好道閘遙控器。</div>
   </section>
 
   <section class="card">
@@ -201,6 +207,20 @@ dialog input{width:100%;font:inherit;font-size:20px;padding:10px;border-radius:1
   </div>
 </dialog>
 
+<dialog id="lrn">
+  <h3 id="lrnTitle"></h3>
+  <svg viewBox="0 0 150 110" aria-hidden="true">
+    <rect class="gate-box" x="30" y="30" width="26" height="72" rx="3"/>
+    <line id="lrnBoom" class="gate-boom" x1="48" y1="40" x2="140" y2="40"/>
+  </svg>
+  <p id="lrnText"></p>
+  <div id="lrnSpin" class="spinner hidden"></div>
+  <div class="btnrow">
+    <button id="lrnCancel" class="btn">取消</button>
+    <button id="lrnOk" class="btn primary">確定</button>
+  </div>
+</dialog>
+
 <script>
 "use strict";
 // ===== Settings you may change =====
@@ -213,7 +233,7 @@ const $ = id => document.getElementById(id);
 
 // ---------- radar link over Web Bluetooth ----------
 class RadarLink {
-  constructor(){ this.dev = null; this.wr = null; this.buf = ""; this.wake = null; this.chain = Promise.resolve(); this.onLog = () => {}; this.onDisconnect = () => {}; }
+  constructor(){ this.dev = null; this.wr = null; this.buf = ""; this.wake = null; this.chain = Promise.resolve(); this.ev = ""; this.learnDone = 0; this.onLog = () => {}; this.onDisconnect = () => {}; }
   get connected(){ return !!(this.dev && this.dev.gatt && this.dev.gatt.connected && this.wr); }
   async choose(){
     this.dev = await navigator.bluetooth.requestDevice({
@@ -230,11 +250,22 @@ class RadarLink {
     nt.addEventListener("characteristicvaluechanged", e => {
       const s = new TextDecoder().decode(e.target.value);
       this.buf += s; this.onLog(s, false);
+      this.ev = (this.ev + s).slice(-200);    // "[Learn] Finish." can arrive after Done, split over packets
+      if (this.ev.includes("[Learn] Finish")) { this.learnDone++; this.ev = ""; }
       if (this.wake) this.wake();
     });
     await nt.startNotifications();
     await sleep(400);      // the radar answers the subscribe with "Error -1" + prompt; let it pass
     this.buf = "";
+  }
+  // resolves once the radar has printed "[Learn] Finish." more than `since` times
+  async waitLearn(since, timeout){
+    const end = Date.now() + timeout;
+    while (this.learnDone <= since) {
+      if (!this.connected) throw new Error("連線中斷");
+      if (Date.now() > end) throw new Error("雷達沒有回報學習完成");
+      await sleep(200);
+    }
   }
   close(){ try { if (this.dev && this.dev.gatt.connected) this.dev.gatt.disconnect(); } catch(e){} this.wr = null; }
   // one command at a time
@@ -392,6 +423,7 @@ function refresh(){
   $("btnSave").textContent = changes.length ? `儲存設定（${changes.length} 項）` : "儲存設定";
   $("btnRead").disabled = !on || busy;
   $("btnReboot").disabled = $("btnReset").disabled = !on || busy;
+  $("btnLearnBg").disabled = $("btnLearnPole").disabled = !on || busy || !current;
   $("btnConnect").textContent = on ? "中斷連線" : "連接雷達";
   $("btnConnect").className = "btn block " + (on ? "" : "primary");
   $("btnConnect").disabled = busy;
@@ -477,6 +509,68 @@ async function restart(cmd, title, text){
   finally { restarting = false; busy = false; refresh(); }
 }
 
+// ---------- learning (same steps and wording as the original app) ----------
+// SetBGLearnStatus 2 = 抬桿背景學習, 1 = start pole up/down learning, 1 1 = end it, 3 = 桿落地學習
+function learnStep(title, text, { boom = "up", ok = "確定", cancel = true, spin = false } = {}){
+  return new Promise(resolve => {
+    const d = $("lrn");
+    $("lrnTitle").textContent = title; $("lrnText").textContent = text;
+    const b = $("lrnBoom");
+    if (boom === "up") { b.setAttribute("x2", "48"); b.setAttribute("y2", "2"); }
+    else { b.setAttribute("x2", "140"); b.setAttribute("y2", "40"); }
+    $("lrnSpin").classList.toggle("hidden", !spin);
+    $("lrnOk").textContent = ok; $("lrnOk").classList.toggle("hidden", !ok);
+    $("lrnCancel").classList.toggle("hidden", !cancel);
+    const done = v => { $("lrnOk").onclick = $("lrnCancel").onclick = null; resolve(v); };
+    $("lrnOk").onclick = () => done(true);
+    $("lrnCancel").onclick = () => done(false);
+    d.oncancel = e => { e.preventDefault(); if (cancel) done(false); };
+    if (!d.open) d.showModal();
+  });
+}
+const KEEP_OUT = "人車不要進入雷達左右各 2 公尺範圍內。";
+async function learnCmd(cmd, waitFinish){
+  const since = link.learnDone;
+  const r = await link.send(cmd);
+  if (!r.ok) throw new Error("雷達沒有接受指令");
+  if (waitFinish) await link.waitLearn(since, 60000);
+}
+async function runLearn(kind){
+  busy = true; refresh();
+  const d = $("lrn");
+  try {
+    if (kind === "bg") {
+      if (!await learnStep("抬桿背景學習", "請確認道閘桿處於抬起狀態！", { boom: "up" })) return;
+      setStatus("抬桿背景學習中…");
+      const p = learnCmd("SetBGLearnStatus 2", true);
+      learnStep("抬桿背景學習中", "請保持道閘桿抬起，" + KEEP_OUT, { boom: "up", ok: "", cancel: false, spin: true });
+      await p;
+      d.close(); toast("抬桿背景學習完成");
+    } else {
+      if (!await learnStep("桿起落學習", "請準備用遙控器控制道閘桿重複起落。", { boom: "down" })) return;
+      setStatus("桿起落學習中…");
+      await learnCmd("SetBGLearnStatus 1", false);
+      await learnStep("桿起落學習中", "請用遙控器讓道閘桿起落至少 3 次，" + KEEP_OUT + "\n起落完成後按「下一步」。", { boom: "up", ok: "下一步", cancel: false, spin: true });
+      const p1 = learnCmd("SetBGLearnStatus 1 1", true);
+      learnStep("桿起落學習中", "儲存起落資料…", { boom: "up", ok: "", cancel: false, spin: true });
+      await p1;
+      if (!await learnStep("桿落地學習", "請先用遙控器把道閘桿落下，再按「下一步」。", { boom: "down", ok: "下一步" })) { d.close(); toast("已完成起落學習，未做落地學習"); return; }
+      if (!await learnStep("桿落地學習", "請確認道閘桿處於落下狀態！", { boom: "down" })) { d.close(); toast("已完成起落學習，未做落地學習"); return; }
+      const p3 = learnCmd("SetBGLearnStatus 3", true);
+      learnStep("桿落地學習中", "請保持道閘桿落下，" + KEEP_OUT, { boom: "down", ok: "", cancel: false, spin: true });
+      await p3;
+      d.close(); toast("桿起落學習完成");
+    }
+  } catch (e) {
+    if (d.open) d.close();
+    await dialog("學習沒有完成", e.message + "\n請重新連線後再做一次。", { cancel: false });
+  } finally {
+    if (d.open) d.close();
+    busy = false;
+    if (link.connected) await readConfig(false); else refresh();
+  }
+}
+
 async function unlock(){
   const pin = await dialog("安裝人員解鎖", "請輸入安裝人員密碼。", { input: true, okText: "解鎖" });
   if (pin == null) return;
@@ -494,6 +588,8 @@ $("btnConnect").onclick = connect;
 $("btnRead").onclick = () => readConfig(false);
 $("btnSave").onclick = save;
 $("btnUnlock").onclick = unlock;
+$("btnLearnBg").onclick = () => runLearn("bg");
+$("btnLearnPole").onclick = () => runLearn("pole");
 $("btnLock").onclick = () => setAdvanced(false);
 $("btnReboot").onclick = () => restart("reboot", "重啟雷達", "確定要重啟雷達嗎？");
 $("btnReset").onclick = () => restart("ResetRadeConfig", "恢復出廠值",

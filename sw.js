@@ -1,6 +1,6 @@
 // Offline cache so the app opens without internet once it has been visited.
-const CACHE = "radar79g-v1";
-const FILES = ["./", "index.html", "manifest.json", "icon-192.png", "icon-512.png"];
+const CACHE = "radar79g-v2";
+const FILES = ["./", "index.html", "manifest.json", "icon-192.png", "icon-512.png", "logo.png", "logo-dark.png"];
 self.addEventListener("install", e => e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting())));
 self.addEventListener("activate", e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())));
 // network first, so updates show up right away; fall back to the cache when offline

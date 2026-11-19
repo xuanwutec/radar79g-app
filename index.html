@@ -227,7 +227,9 @@ dialog input{width:100%;font:inherit;font-size:20px;padding:10px;border-radius:1
 const INSTALLER_PIN = "8888";        // 安裝人員密碼（進階設定）
 // ===================================
 
-const SVC = 0xae30, CH_WRITE = 0xae01, CH_NOTIFY = 0xae02;
+// full 128-bit UUID strings: some browsers (e.g. Bluefy on iPhone) do not accept the short numeric form
+const uuid16 = n => `0000${n.toString(16).padStart(4, "0")}-0000-1000-8000-00805f9b34fb`;
+const SVC = uuid16(0xae30), CH_WRITE = uuid16(0xae01), CH_NOTIFY = uuid16(0xae02);
 const PROMPT_RX = /\S+:\/>\s*$/;
 const $ = id => document.getElementById(id);
 
@@ -236,6 +238,7 @@ class RadarLink {
   constructor(){ this.dev = null; this.wr = null; this.buf = ""; this.wake = null; this.chain = Promise.resolve(); this.ev = ""; this.learnDone = 0; this.onLog = () => {}; this.onDisconnect = () => {}; }
   get connected(){ return !!(this.dev && this.dev.gatt && this.dev.gatt.connected && this.wr); }
   async choose(){
+    this.stage = "選擇裝置";
     this.dev = await navigator.bluetooth.requestDevice({
       filters: [{ namePrefix: "79G" }, { services: [SVC] }],
       optionalServices: [SVC],
@@ -243,8 +246,11 @@ class RadarLink {
     this.dev.addEventListener("gattserverdisconnected", () => { this.wr = null; this.onDisconnect(); });
   }
   async open(){
+    this.stage = "藍牙連線";
     const server = await this.dev.gatt.connect();
+    this.stage = "尋找服務";
     const svc = await server.getPrimaryService(SVC);
+    this.stage = "尋找特徵";
     this.wr = await svc.getCharacteristic(CH_WRITE);
     const nt = await svc.getCharacteristic(CH_NOTIFY);
     nt.addEventListener("characteristicvaluechanged", e => {
@@ -254,6 +260,7 @@ class RadarLink {
       if (this.ev.includes("[Learn] Finish")) { this.learnDone++; this.ev = ""; }
       if (this.wake) this.wake();
     });
+    this.stage = "開啟通知";
     await nt.startNotifications();
     await sleep(400);      // the radar answers the subscribe with "Error -1" + prompt; let it pass
     this.buf = "";
@@ -441,12 +448,17 @@ async function connect(){
     await afterConnect();
   } catch (e) {
     if (e && e.name === "NotFoundError") setStatus("沒有選擇雷達。");
-    else setStatus("連線失敗：" + (e && e.message || e), "err");
+    else {
+      const detail = [e && e.name, e && e.message].filter(Boolean).join(" ") || String(e);
+      setStatus(`連線失敗（${link.stage || "?"}）：${detail}`, "err");
+      link.onLog(`連線失敗 [${link.stage}] ${detail}\n`, false);
+    }
     link.close();
   } finally { busy = false; refresh(); }
 }
 
 async function afterConnect(){
+  link.stage = "讀取雷達";
   const ver = await link.send("GetSoftwareVersion");
   const v = (ver.text.match(/VER:(\S+)/) || [])[1] || "", sn = (ver.text.match(/SN:(\S+)/) || [])[1] || "";
   $("devInfo").textContent = `${link.dev.name || "雷達"}　韌體 ${v}　序號 ${sn}`;

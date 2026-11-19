@@ -57,6 +57,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin-top:6px}
 .btn:disabled,.seg button:disabled,.stepper button:disabled{opacity:.45;cursor:not-allowed}
 .status{font-size:14px;color:var(--muted);margin-top:8px;min-height:1.5em}
 .status.ok{color:var(--ok)} .status.err{color:var(--danger)}
+.linkbtn{display:block;margin:10px auto 0;background:none;border:0;color:var(--accent);font:inherit;font-size:14px;text-decoration:underline;cursor:pointer}
 .btnrow{display:flex;gap:8px;flex-wrap:wrap}
 .btnrow .btn{flex:1 1 140px}
 .bar{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);
@@ -101,6 +102,7 @@ dialog input{width:100%;font:inherit;font-size:20px;padding:10px;border-radius:1
     <button id="btnConnect" class="btn primary block">連接雷達</button>
     <div id="connStatus" class="status">請打開手機藍牙，靠近雷達後按「連接雷達」。</div>
     <div id="devInfo" class="note hidden"></div>
+    <button id="btnConnectAll" class="linkbtn" type="button">清單裡找不到雷達？顯示所有藍牙裝置</button>
   </section>
 
   <section class="card" id="basicCard">
@@ -237,12 +239,12 @@ const $ = id => document.getElementById(id);
 class RadarLink {
   constructor(){ this.dev = null; this.wr = null; this.buf = ""; this.wake = null; this.chain = Promise.resolve(); this.ev = ""; this.learnDone = 0; this.onLog = () => {}; this.onDisconnect = () => {}; }
   get connected(){ return !!(this.dev && this.dev.gatt && this.dev.gatt.connected && this.wr); }
-  async choose(){
+  async choose(all = false){
     this.stage = "選擇裝置";
-    this.dev = await navigator.bluetooth.requestDevice({
-      filters: [{ namePrefix: "79G" }, { services: [SVC] }],
-      optionalServices: [SVC],
-    });
+    // "all" lists every nearby device, for browsers/phones where the name filter finds nothing
+    this.dev = await navigator.bluetooth.requestDevice(all
+      ? { acceptAllDevices: true, optionalServices: [SVC] }
+      : { filters: [{ namePrefix: "79G" }, { services: [SVC] }], optionalServices: [SVC] });
     this.dev.addEventListener("gattserverdisconnected", () => { this.wr = null; this.onDisconnect(); });
   }
   async open(){
@@ -434,15 +436,16 @@ function refresh(){
   $("btnConnect").textContent = on ? "中斷連線" : "連接雷達";
   $("btnConnect").className = "btn block " + (on ? "" : "primary");
   $("btnConnect").disabled = busy;
+  $("btnConnectAll").classList.toggle("hidden", on || !navigator.bluetooth);
 }
 
 // ---------- actions ----------
-async function connect(){
+async function connect(all = false){
   if (link.connected) { link.close(); current = draft = null; $("devInfo").classList.add("hidden"); setStatus("已中斷連線。"); refresh(); return; }
   busy = true; refresh();
   try {
-    setStatus("請在跳出的清單選擇雷達（名稱以 79G 開頭）…");
-    await link.choose();
+    setStatus(all ? "請在清單中選擇雷達（名稱通常是 79G-Radar 開頭，也可能顯示為未命名裝置）…" : "請在跳出的清單選擇雷達（名稱以 79G 開頭）…");
+    await link.choose(all);
     setStatus("連線中…");
     await link.open();
     await afterConnect();
@@ -596,7 +599,8 @@ function setAdvanced(on){
 
 // ---------- start ----------
 buildControls();
-$("btnConnect").onclick = connect;
+$("btnConnect").onclick = () => connect(false);
+$("btnConnectAll").onclick = () => { if (!link.connected && !busy) connect(true); };
 $("btnRead").onclick = () => readConfig(false);
 $("btnSave").onclick = save;
 $("btnUnlock").onclick = unlock;

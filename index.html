@@ -74,6 +74,11 @@ pre{white-space:pre-wrap;word-break:break-all;font-size:12px;background:var(--bg
 .note{font-size:13px;color:var(--muted);margin-top:8px}
 dialog{border:0;border-radius:var(--radius);background:var(--card);color:var(--text);padding:20px;width:min(360px,calc(100% - 32px))}
 dialog::backdrop{background:rgba(0,0,0,.45)}
+#bkList{max-height:50vh;overflow:auto}
+.bk-item{border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:8px}
+.bk-item .t{font-weight:700}
+.bk-item .d{font-size:13px;color:var(--muted);margin:2px 0 8px}
+.bk-item .btnrow .btn{flex:1 1 80px;padding:8px}
 #lrn{text-align:center}
 #lrn svg{width:150px;height:110px;margin:4px auto 8px;display:block}
 #lrn .gate-box{fill:var(--muted)}
@@ -175,6 +180,13 @@ dialog input{width:100%;font:inherit;font-size:20px;padding:10px;border-radius:1
         <div class="seg" data-field="BleAutoOff" data-options='[[0,"關閉"],[1,"開啟"]]'></div>
       </div>
       <div class="row">
+        <div class="label">備份與還原 <span class="hint">測試前先備份，測完可還原</span></div>
+        <div class="btnrow">
+          <button id="btnBackup" class="btn">備份目前設定</button>
+          <button id="btnRestore" class="btn">還原備份</button>
+        </div>
+      </div>
+      <div class="row">
         <div class="label">雷達維護</div>
         <div class="btnrow">
           <button id="btnReboot" class="btn">重啟雷達</button>
@@ -206,6 +218,17 @@ dialog input{width:100%;font:inherit;font-size:20px;padding:10px;border-radius:1
   <div class="btnrow">
     <button id="dlgCancel" class="btn" value="cancel">取消</button>
     <button id="dlgOk" class="btn primary" value="ok">確定</button>
+  </div>
+</dialog>
+
+<dialog id="bk">
+  <h3>還原備份</h3>
+  <p class="note" style="margin:0 0 10px">選一份備份載入畫面，檢查後再按「儲存設定」寫入雷達。</p>
+  <div id="bkList"></div>
+  <input id="bkFile" type="file" accept=".json,application/json" class="hidden">
+  <div class="btnrow" style="margin-top:12px">
+    <button id="bkImport" class="btn">從檔案匯入</button>
+    <button id="bkClose" class="btn">關閉</button>
   </div>
 </dialog>
 
@@ -356,6 +379,7 @@ function diffConfig(from, to){
 // ---------- UI state ----------
 const link = new RadarLink();
 let current = null, draft = null, busy = false;
+let radarInfo = { sn: "", ver: "", name: "" };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 link.onLog = (s, tx) => {
@@ -432,6 +456,7 @@ function refresh(){
   $("btnSave").textContent = changes.length ? `儲存設定（${changes.length} 項）` : "儲存設定";
   $("btnRead").disabled = !on || busy;
   $("btnReboot").disabled = $("btnReset").disabled = !on || busy;
+  $("btnBackup").disabled = $("btnRestore").disabled = !on || busy || !current;
   $("btnLearnBg").disabled = $("btnLearnPole").disabled = !on || busy || !current;
   $("btnConnect").textContent = on ? "中斷連線" : "連接雷達";
   $("btnConnect").className = "btn block " + (on ? "" : "primary");
@@ -464,6 +489,7 @@ async function afterConnect(){
   link.stage = "讀取雷達";
   const ver = await link.send("GetSoftwareVersion");
   const v = (ver.text.match(/VER:(\S+)/) || [])[1] || "", sn = (ver.text.match(/SN:(\S+)/) || [])[1] || "";
+  radarInfo = { sn, ver: v, name: link.dev.name || "" };
   $("devInfo").textContent = `${link.dev.name || "雷達"}　韌體 ${v}　序號 ${sn}`;
   $("devInfo").classList.remove("hidden");
   await link.send(`SetParas 10 2 ${Math.floor(Date.now() / 1000)}`);   // sync the radar clock, like the original app
@@ -586,6 +612,72 @@ async function runLearn(kind){
   }
 }
 
+// ---------- settings backup / restore ----------
+// A backup holds the FIELDS values. Restoring only loads them into the screen;
+// the normal 儲存設定 step (with its confirmation) writes them to the radar.
+const BK_KEY = "radar79g-backups";
+function loadBackups(){ try { return JSON.parse(localStorage.getItem(BK_KEY) || "[]"); } catch(e){ return []; } }
+function storeBackups(list){ try { localStorage.setItem(BK_KEY, JSON.stringify(list.slice(0, 30))); return true; } catch(e){ return false; } }
+const pad2 = n => String(n).padStart(2, "0");
+function stamp(d){ return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`; }
+function summary(v){
+  const pt = { 1: "直桿", 2: "柵欄桿", 3: "廣告桿" }[v.PoleType] || "?";
+  const fx = { 1: "左", 2: "右" }[v.Fixation] || "?";
+  return `${pt}　${v.PoleLengthCm != null ? (v.PoleLengthCm / 100).toFixed(1) + " m" : "?"}　${fx}固定`;
+}
+function makeBackup(){
+  const values = {};
+  FIELDS.forEach(([k]) => { if (current[k] != null) values[k] = current[k]; });
+  return { app: "radar79g", version: 1, time: new Date().toISOString(), sn: radarInfo.sn, firmware: radarInfo.ver, name: radarInfo.name, values };
+}
+async function backup(){
+  if (!current) return;
+  if (diffConfig(current, draft).length && !await dialog("備份目前設定", "畫面上有還沒儲存的修改。備份的是雷達目前實際的設定，不含這些修改。", { okText: "繼續備份" })) return;
+  const b = makeBackup();
+  const list = loadBackups(); list.unshift(b);
+  const saved = storeBackups(list);
+  // also hand the user a file, so the backup survives clearing the browser or changing phones
+  try {
+    const blob = new Blob([JSON.stringify(b, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `radar79g_backup_${b.sn || "radar"}_${stamp(new Date(b.time)).replace(/[: ]/g, "-")}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  } catch(e) {}
+  toast(saved ? "已備份（手機內＋下載檔案）" : "已下載備份檔案");
+}
+function renderBackups(){
+  const box = $("bkList"); box.textContent = "";
+  const list = loadBackups();
+  if (!list.length) { box.innerHTML = '<p class="note">這支手機還沒有備份。可以按「從檔案匯入」。</p>'; return; }
+  list.forEach((b, i) => {
+    const el = document.createElement("div"); el.className = "bk-item";
+    const t = document.createElement("div"); t.className = "t"; t.textContent = stamp(new Date(b.time));
+    const d = document.createElement("div"); d.className = "d";
+    d.textContent = `序號 ${b.sn || "?"}　${summary(b.values || {})}` + (b.sn && radarInfo.sn && b.sn !== radarInfo.sn ? "　（不是這台雷達）" : "");
+    const row = document.createElement("div"); row.className = "btnrow";
+    const use = document.createElement("button"); use.className = "btn primary"; use.textContent = "載入";
+    use.onclick = () => applyBackup(b);
+    const del = document.createElement("button"); del.className = "btn"; del.textContent = "刪除";
+    del.onclick = () => { const l = loadBackups(); l.splice(i, 1); storeBackups(l); renderBackups(); };
+    row.append(use, del); el.append(t, d, row); box.appendChild(el);
+  });
+}
+async function applyBackup(b){
+  if (!b || b.app !== "radar79g" || !b.values) { toast("不是這個 App 的備份檔"); return; }
+  $("bk").close();
+  if (b.sn && radarInfo.sn && b.sn !== radarInfo.sn &&
+      !await dialog("序號不同", `這份備份來自序號 ${b.sn} 的雷達，目前連線的是 ${radarInfo.sn}。\n\n確定要載入嗎？`, { okText: "載入" })) return;
+  draft = { ...current };
+  FIELDS.forEach(([k]) => { if (b.values[k] != null) draft[k] = b.values[k]; });
+  refresh();
+  const n = diffConfig(current, draft).length;
+  if (n) toast(`已載入備份，有 ${n} 項不同，請檢查後按「儲存設定」`);
+  else toast("備份和雷達目前設定相同，不用還原");
+}
+function openRestore(){ renderBackups(); $("bk").showModal(); }
+
 async function unlock(){
   const pin = await dialog("安裝人員解鎖", "請輸入安裝人員密碼。", { input: true, okText: "解鎖" });
   if (pin == null) return;
@@ -604,6 +696,15 @@ $("btnConnectAll").onclick = () => { if (!link.connected && !busy) connect(true)
 $("btnRead").onclick = () => readConfig(false);
 $("btnSave").onclick = save;
 $("btnUnlock").onclick = unlock;
+$("btnBackup").onclick = backup;
+$("btnRestore").onclick = openRestore;
+$("bkClose").onclick = () => $("bk").close();
+$("bkImport").onclick = () => $("bkFile").click();
+$("bkFile").onchange = async e => {
+  const f = e.target.files[0]; e.target.value = "";
+  if (!f) return;
+  try { await applyBackup(JSON.parse(await f.text())); } catch(err) { toast("檔案讀不出來"); }
+};
 $("btnLearnBg").onclick = () => runLearn("bg");
 $("btnLearnPole").onclick = () => runLearn("pole");
 $("btnLock").onclick = () => setAdvanced(false);

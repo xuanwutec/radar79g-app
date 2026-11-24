@@ -211,6 +211,7 @@ dialog input{width:100%;font:inherit;font-size:20px;padding:10px;border-radius:1
     <summary>通訊紀錄（給技術人員看）</summary>
     <pre id="log"></pre>
   </details>
+  <div id="appVer" class="note" style="text-align:center;margin:16px 0 0"></div>
 </main>
 
 <div class="bar">
@@ -259,6 +260,7 @@ dialog input{width:100%;font:inherit;font-size:20px;padding:10px;border-radius:1
 <script>
 "use strict";
 // ===== Settings you may change =====
+const APP_VERSION = "v1.1";          // App 版本號：每次上線改版都要加
 const INSTALLER_PIN = "8888";        // 安裝人員密碼（進階設定）
 // 已確認可用的韌體版本（GetSoftwareVersion 的 VER:）。其他版本只開放安全的基本功能。
 // 23A_3 實機測過；23A_4 為同系列，以韌體檔比對確認指令與設定格式相同。
@@ -800,6 +802,7 @@ function setAdvanced(on){
 
 // ---------- start ----------
 buildControls();
+$("appVer").textContent = `玄伍科技 79G 雷達設定 App ${APP_VERSION}`;
 $("btnConnect").onclick = () => connect(false);
 $("btnConnectAll").onclick = () => { if (!link.connected && !busy) connect(true); };
 $("btnRead").onclick = () => readConfig(false);

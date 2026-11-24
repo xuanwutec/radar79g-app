@@ -108,6 +108,7 @@ dialog input{width:100%;font:inherit;font-size:20px;padding:10px;border-radius:1
     <button id="btnConnect" class="btn primary block">連接雷達</button>
     <div id="connStatus" class="status">請打開手機藍牙，靠近雷達後按「連接雷達」。</div>
     <div id="devInfo" class="note hidden"></div>
+    <div id="verWarn" class="banner warn hidden"></div>
     <button id="btnConnectAll" class="linkbtn" type="button">清單裡找不到雷達？顯示所有藍牙裝置</button>
   </section>
 
@@ -259,6 +260,11 @@ dialog input{width:100%;font:inherit;font-size:20px;padding:10px;border-radius:1
 "use strict";
 // ===== Settings you may change =====
 const INSTALLER_PIN = "8888";        // 安裝人員密碼（進階設定）
+// 已確認可用的韌體版本（GetSoftwareVersion 的 VER:）。其他版本只開放安全的基本功能。
+// 23A_3 實機測過；23A_4 為同系列，以韌體檔比對確認指令與設定格式相同。
+const TESTED_VERSIONS = ["BR7701D-V311B031_23A_3", "BR7701D-V311B031_23A_4"];
+// 未測版本仍可寫的欄位：這幾個用專屬指令，各版本韌體都有
+const SAFE_FIELDS = ["PoleType", "PoleLengthCm", "JudgeSwitch"];
 // ===================================
 
 // full 128-bit UUID strings: some browsers (e.g. Bluefy on iPhone) do not accept the short numeric form
@@ -357,7 +363,8 @@ function parseConfig(text){
       case "Direction Ctrl": c.PassDirection = n(0); break;
       case "Judge Switch": c.JudgeSwitch = n(0); break;
       case "GateRelay Ctrl": c.RelayMode = n(0); break;
-      case "BleSwitchFlag": c.BleAutoOff = n(1); break;
+      // 3V1 prints two values (the 2nd is auto-off); other families print one whose meaning is unknown
+      case "BleSwitchFlag": c.BleAutoOff = v.length >= 2 ? n(1) : null; break;
       case "GateTimeParam": c.VehicleMs = n(0); c.DropDelayMs = n(1); break;
       case "YLimit Width": c.NearCm = n(0); break;
       case "Left Width": c.LeftWidthCm = n(0); break;
@@ -383,14 +390,19 @@ const FIELDS = [
   ["BleAutoOff", "藍牙自動關閉", v => `SetParas 4 2 ${v}`, true],
 ];
 function diffConfig(from, to){
-  return FIELDS.filter(([k]) => to[k] != null && from[k] !== to[k])
+  return FIELDS.filter(([k]) => to[k] != null && from[k] !== to[k] && !fieldLocked(k))
                .map(([k, label, cmd, adv]) => ({ key: k, label, cmd: cmd(to[k]), adv: !!adv }));
 }
 
 // ---------- UI state ----------
 const link = new RadarLink();
 let current = null, draft = null, busy = false;
-let radarInfo = { sn: "", ver: "", name: "" };
+let radarInfo = { sn: "", ver: "", name: "", tested: true };
+// a field is locked when this firmware is untested (except the safe ones) or the radar did not report it
+function fieldLocked(k){
+  if (!radarInfo.tested && !SAFE_FIELDS.includes(k)) return true;
+  return !current || current[k] == null;
+}
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 link.onLog = (s, tx) => {
@@ -454,13 +466,15 @@ function refresh(){
   const ready = on && !!draft && !busy;
   document.querySelectorAll(".seg[data-field]").forEach(seg => {
     const v = draft ? draft[seg.dataset.field] : null;
-    seg.querySelectorAll("button").forEach(b => { b.setAttribute("aria-pressed", String(v != null && +b.dataset.val === v)); b.disabled = !ready; });
+    const lk = ready && fieldLocked(seg.dataset.field);
+    seg.querySelectorAll("button").forEach(b => { b.setAttribute("aria-pressed", String(v != null && +b.dataset.val === v)); b.disabled = !ready || lk; });
   });
   document.querySelectorAll(".stepper[data-field]").forEach(st => {
     const v = draft ? draft[st.dataset.field] : null;
     st.querySelector(".val").textContent = v == null ? "—" : (v / +st.dataset.scale).toFixed(+st.dataset.dp) + st.dataset.unit;
-    st.querySelectorAll("button").forEach(b => b.disabled = !ready);
-    if (st._range) { st._range.disabled = !ready; if (v != null) st._range.value = v; }
+    const lk = ready && fieldLocked(st.dataset.field);
+    st.querySelectorAll("button").forEach(b => b.disabled = !ready || lk);
+    if (st._range) { st._range.disabled = !ready || lk; if (v != null) st._range.value = v; }
   });
   const changes = current && draft ? diffConfig(current, draft) : [];
   $("btnSave").disabled = !ready || changes.length === 0;
@@ -476,11 +490,14 @@ function refresh(){
   $("btnConnect").className = "btn block " + (on ? "" : "primary");
   $("btnConnect").disabled = busy;
   $("btnConnectAll").classList.toggle("hidden", on || !navigator.bluetooth);
+  const untested = on && !radarInfo.tested;
+  $("btnUnlock").disabled = untested;
+  if (untested && !$("advPanel").classList.contains("hidden")) setAdvanced(false);
 }
 
 // ---------- actions ----------
 async function connect(all = false){
-  if (link.connected) { link.close(); current = draft = null; $("devInfo").classList.add("hidden"); setStatus("已中斷連線。"); refresh(); return; }
+  if (link.connected) { link.close(); current = draft = null; $("devInfo").classList.add("hidden"); $("verWarn").classList.add("hidden"); setStatus("已中斷連線。"); refresh(); return; }
   busy = true; refresh();
   try {
     setStatus(all ? "請在清單中選擇雷達（名稱通常是 79G-Radar 開頭，也可能顯示為未命名裝置）…" : "請在跳出的清單選擇雷達（名稱以 79G 開頭）…");
@@ -503,9 +520,16 @@ async function afterConnect(){
   link.stage = "讀取雷達";
   const ver = await link.send("GetSoftwareVersion");
   const v = (ver.text.match(/VER:(\S+)/) || [])[1] || "", sn = (ver.text.match(/SN:(\S+)/) || [])[1] || "";
-  radarInfo = { sn, ver: v, name: link.dev.name || "" };
-  $("devInfo").textContent = `${link.dev.name || "雷達"}　韌體 ${v}　序號 ${sn}`;
+  const prompt = ((ver.text.match(/(\S+):\/>/) || [])[1] || "");
+  radarInfo = { sn, ver: v, name: link.dev.name || "", prompt, tested: TESTED_VERSIONS.includes(v) };
+  $("devInfo").textContent = `${link.dev.name || "雷達"}　韌體 ${v || "?"}　序號 ${sn}`;
   $("devInfo").classList.remove("hidden");
+  const w = $("verWarn");
+  w.classList.toggle("hidden", radarInfo.tested);
+  if (!radarInfo.tested) {
+    w.textContent = `這台雷達的韌體版本（${v || "讀不到"}）還沒經過本 App 確認。為了安全，目前只開放讀取設定、道閘桿類型、桿長、人車區分、學習和目標圖，其他設定與進階設定先鎖住。請把畫面上的韌體版本告訴玄伍科技，確認後即可全部開放。`;
+    link.onLog(`[App] 未確認的韌體版本 ${v}（${prompt}），已限制設定項目\n`, false);
+  }
   await link.send(`SetParas 10 2 ${Math.floor(Date.now() / 1000)}`);   // sync the radar clock, like the original app
   await readConfig(true);
 }

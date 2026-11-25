@@ -273,7 +273,7 @@ dialog input{width:100%;font:inherit;font-size:20px;padding:10px;border-radius:1
 <script>
 "use strict";
 // ===== Settings you may change =====
-const APP_VERSION = "v1.7";          // App 版本號：每次上線改版都要加
+const APP_VERSION = "v1.8";          // App 版本號：每次上線改版都要加
 const INSTALLER_PIN = "8888";        // 安裝人員密碼（進階設定）
 // 已確認可用的韌體版本（GetSoftwareVersion 的 VER:）。其他版本只開放安全的基本功能。
 // 23A_3 實機測過；23A_4 為同系列，以韌體檔比對確認指令與設定格式相同。
@@ -431,7 +431,33 @@ link.onLog = (s, tx) => {
   if (el.textContent.length > 20000) el.textContent = el.textContent.slice(-15000);
   el.scrollTop = el.scrollHeight;
 };
-link.onDisconnect = () => { if (streaming) { streaming = false; busy = false; link.onStream = null; } if (!restarting && !otaRunning) { setStatus("連線已中斷，請重新連接。", "err"); refresh(); } };
+let userClosing = false, reconnecting = false, lostLink = false;
+link.onDisconnect = () => {
+  if (streaming) { streaming = false; busy = false; link.onStream = null; }
+  if (restarting || otaRunning || reconnecting) return;
+  if (userClosing) { userClosing = false; return; }
+  autoReconnect();
+};
+// reconnect to the same radar without the device chooser, keeping unsaved changes on screen
+async function autoReconnect(){
+  reconnecting = true; busy = true; refresh();
+  const pending = current && draft ? diffConfig(current, draft).map(c => c.key) : [];
+  const keep = draft ? { ...draft } : null;
+  try {
+    for (let i = 1; i <= 8 && !link.connected; i++) {
+      setStatus(`藍牙斷線，自動重新連線中…（第 ${i} 次）`);
+      try { await link.open(); } catch (e) { await sleep(2500); }
+    }
+    if (!link.connected) throw new Error("連不上");
+    await afterConnect();
+    if (keep && draft) { pending.forEach(k => { draft[k] = keep[k]; }); }
+    setStatus(pending.length ? `已自動重新連線，尚未儲存的 ${pending.length} 項修改還在。` : "已自動重新連線。", "ok");
+    link.onLog("[App] 斷線後自動重新連線成功\n", false);
+  } catch (e) {
+    lostLink = true;
+    setStatus("藍牙斷線，自動重新連線失敗。請靠近雷達後按「連接雷達」。", "err");
+  } finally { reconnecting = false; busy = false; refresh(); }
+}
 
 function setStatus(t, kind){ const el = $("connStatus"); el.textContent = t; el.className = "status" + (kind ? " " + kind : ""); }
 let toastTimer;
@@ -523,13 +549,15 @@ function refresh(){
 
 // ---------- actions ----------
 async function connect(all = false){
-  if (link.connected) { link.close(); current = draft = null; $("devInfo").classList.add("hidden"); $("verWarn").classList.add("hidden"); setStatus("已中斷連線。"); refresh(); return; }
+  if (link.connected) { userClosing = true; link.close(); current = draft = null; $("devInfo").classList.add("hidden"); $("verWarn").classList.add("hidden"); setStatus("已中斷連線。"); refresh(); return; }
   busy = true; refresh();
   try {
     setStatus(all ? "請在清單中選擇雷達（名稱通常是 79G-Radar 開頭，也可能顯示為未命名裝置）…" : "請在跳出的清單選擇雷達（名稱以 79G 開頭）…");
-    await link.choose(all);
-    setStatus("連線中…");
-    await link.open();
+    // same radar as before: reconnect without the chooser first
+    let reused = false;
+    if (link.dev && !all && lostLink) { try { setStatus("重新連線中…"); await link.open(); reused = true; } catch (e) {} }
+    if (!reused) { await link.choose(all); setStatus("連線中…"); await link.open(); }
+    lostLink = false;
     await afterConnect();
   } catch (e) {
     if (e && e.name === "NotFoundError") setStatus("沒有選擇雷達。");

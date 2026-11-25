@@ -273,7 +273,7 @@ dialog input{width:100%;font:inherit;font-size:20px;padding:10px;border-radius:1
 <script>
 "use strict";
 // ===== Settings you may change =====
-const APP_VERSION = "v1.4";          // App 版本號：每次上線改版都要加
+const APP_VERSION = "v1.5";          // App 版本號：每次上線改版都要加
 const INSTALLER_PIN = "8888";        // 安裝人員密碼（進階設定）
 // 已確認可用的韌體版本（GetSoftwareVersion 的 VER:）。其他版本只開放安全的基本功能。
 // 23A_3 實機測過；23A_4 為同系列，以韌體檔比對確認指令與設定格式相同。
@@ -581,7 +581,11 @@ async function save(){
       setStatus(`寫入${c.label}…`);
       let r = await link.send(c.cmd);
       if (!r.ok) { await sleep(300); r = await link.send(c.cmd); }   // one retry
-      if (!r.ok) failed.push(c.label);
+      if (!r.ok) {
+        // show what the radar answered, so a rejected value can be told apart from a lost packet
+        const ans = r.text.replace(/\r/g, "").replace(/\S+:\/>/g, "").replace(/\bDone\b/g, "").split("\n").map(x => x.trim()).filter(Boolean).join(" ").slice(0, 80);
+        failed.push(`${c.label}（${c.cmd}）\n　雷達回覆：${ans || (r.timedOut ? "沒有回應" : "（空白）")}`);
+      }
     }
   } catch (e) { failed.push("通訊錯誤：" + e.message); }
   await readConfig(true);

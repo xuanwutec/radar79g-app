@@ -87,6 +87,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .spinner{width:28px;height:28px;margin:0 auto 14px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 dialog h3{margin:0 0 8px;font-size:18px}
+progress{width:100%;height:14px;margin:4px 0 12px;accent-color:var(--accent)}
 dialog p{margin:0 0 16px;white-space:pre-line}
 dialog input{width:100%;font:inherit;font-size:20px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text);margin-bottom:16px;letter-spacing:4px;text-align:center}
 </style>
@@ -196,6 +197,10 @@ dialog input{width:100%;font:inherit;font-size:20px;padding:10px;border-radius:1
           <button id="btnRestore" class="btn">還原備份</button>
         </div>
       </div>
+      <div class="row hidden" id="otaRow">
+        <div class="label">韌體升級 <span class="hint" id="otaHint">內建 23A_4</span></div>
+        <button id="btnOta" class="btn block">升級雷達韌體</button>
+      </div>
       <div class="row">
         <div class="label">雷達維護</div>
         <div class="btnrow">
@@ -243,6 +248,14 @@ dialog input{width:100%;font:inherit;font-size:20px;padding:10px;border-radius:1
   </div>
 </dialog>
 
+<dialog id="ota">
+  <h3 id="otaTitle">韌體升級中</h3>
+  <p id="otaText"></p>
+  <progress id="otaBar" max="100" value="0"></progress>
+  <div class="note" id="otaSub" style="margin:0 0 12px"></div>
+  <div class="btnrow"><button id="otaClose" class="btn primary hidden">關閉</button></div>
+</dialog>
+
 <dialog id="lrn">
   <h3 id="lrnTitle"></h3>
   <svg viewBox="0 0 150 110" aria-hidden="true">
@@ -260,7 +273,7 @@ dialog input{width:100%;font:inherit;font-size:20px;padding:10px;border-radius:1
 <script>
 "use strict";
 // ===== Settings you may change =====
-const APP_VERSION = "v1.2";          // App 版本號：每次上線改版都要加
+const APP_VERSION = "v1.3";          // App 版本號：每次上線改版都要加
 const INSTALLER_PIN = "8888";        // 安裝人員密碼（進階設定）
 // 已確認可用的韌體版本（GetSoftwareVersion 的 VER:）。其他版本只開放安全的基本功能。
 // 23A_3 實機測過；23A_4 為同系列，以韌體檔比對確認指令與設定格式相同。
@@ -296,6 +309,7 @@ class RadarLink {
     this.wr = await svc.getCharacteristic(CH_WRITE);
     const nt = await svc.getCharacteristic(CH_NOTIFY);
     nt.addEventListener("characteristicvaluechanged", e => {
+      if (this.onRaw) { this.onRaw(new Uint8Array(e.target.value.buffer, e.target.value.byteOffset, e.target.value.byteLength)); if (this.wake) this.wake(); return; }
       const s = new TextDecoder().decode(e.target.value);
       this.buf += s;
       if (this.onStream) this.onStream(s); else this.onLog(s, false);
@@ -417,7 +431,7 @@ link.onLog = (s, tx) => {
   if (el.textContent.length > 20000) el.textContent = el.textContent.slice(-15000);
   el.scrollTop = el.scrollHeight;
 };
-link.onDisconnect = () => { if (streaming) { streaming = false; busy = false; link.onStream = null; } if (!restarting) { setStatus("連線已中斷，請重新連接。", "err"); refresh(); } };
+link.onDisconnect = () => { if (streaming) { streaming = false; busy = false; link.onStream = null; } if (!restarting && !otaRunning) { setStatus("連線已中斷，請重新連接。", "err"); refresh(); } };
 
 function setStatus(t, kind){ const el = $("connStatus"); el.textContent = t; el.className = "status" + (kind ? " " + kind : ""); }
 let toastTimer;
@@ -486,7 +500,7 @@ function refresh(){
   $("btnSave").disabled = !ready || changes.length === 0;
   $("btnSave").textContent = changes.length ? `儲存設定（${changes.length} 項）` : "儲存設定";
   $("btnRead").disabled = !on || busy;
-  $("btnReboot").disabled = $("btnReset").disabled = !on || busy;
+  $("btnReboot").disabled = $("btnReset").disabled = $("btnOta").disabled = !on || busy;
   $("btnTgt").disabled = !on || (busy && !streaming);
   $("btnTgt").textContent = streaming ? "停止顯示" : "開始顯示目標";
   $("btnTgt").className = "btn block " + (streaming ? "danger" : "primary");
@@ -805,6 +819,163 @@ function setAdvanced(on){
   try { on ? sessionStorage.setItem("adv", "1") : sessionStorage.removeItem("adv"); } catch(e){}
 }
 
+// ---------- firmware upgrade over Bluetooth (protocol: protocol/OTA升級協定.md) ----------
+// Only images listed here can be flashed. The radar's bootloader checks nothing but the model
+// string, so the family check below is what stops a 1V3 image going onto a 3V1 radar.
+const FIRMWARES = [
+  { ver: "BR7701D-V311B031_23A_4", file: "firmware/BR7701D-V311B031_23A_4.bin", size: 100636, sum: 0x00a2c353, family: "Gate-BR-3V1" },
+];
+const OTA_BLOCK = 160;
+function crc16(bytes){
+  let c = 0xffff;
+  for (const x of bytes) { c ^= x; for (let i = 0; i < 8; i++) c = (c & 1) ? (c >>> 1) ^ 0xa001 : c >>> 1; }
+  return c;
+}
+// "DM" 02 <cmd> <len BE = payload+2> <payload> <CRC16/MODBUS of bytes from index 2, BE>
+function otaFrame(cmd, payload){
+  const f = new Uint8Array(8 + payload.length);
+  f.set([0x44, 0x4d, 0x02, cmd, (payload.length + 2) >> 8, (payload.length + 2) & 255]);
+  f.set(payload, 6);
+  const c = crc16(f.subarray(2, 6 + payload.length));
+  f[6 + payload.length] = c >> 8; f[7 + payload.length] = c & 255;
+  return f;
+}
+// collects bootloader frames from the notify stream; anything else (e.g. "AT+NAME?") is skipped
+class OtaRx {
+  constructor(){ this.buf = []; this.frames = []; }
+  push(bytes){
+    this.buf.push(...bytes);
+    for (;;) {
+      let i = 0;
+      while (i + 1 < this.buf.length && !(this.buf[i] === 0x44 && this.buf[i + 1] === 0x4d)) i++;
+      if (i) this.buf.splice(0, i);
+      if (this.buf.length < 6) return;
+      const len = (this.buf[4] << 8) | this.buf[5];
+      if (this.buf[2] !== 0x02 || len < 3 || len > 300) { this.buf.splice(0, 1); continue; }
+      if (this.buf.length < 6 + len) return;
+      const f = Uint8Array.from(this.buf.splice(0, 6 + len));
+      const c = crc16(f.subarray(2, f.length - 2));
+      if ((f[f.length - 2] << 8 | f[f.length - 1]) !== c) continue;   // bad CRC: drop
+      this.frames.push({ cmd: f[3], payload: f.subarray(6, f.length - 2) });
+    }
+  }
+  async wait(match, timeout){
+    const end = Date.now() + timeout;
+    for (;;) {
+      const i = this.frames.findIndex(match);
+      if (i >= 0) return this.frames.splice(i, 1)[0];
+      if (!link.connected) throw new Error("藍牙連線中斷");
+      if (Date.now() > end) return null;
+      await sleep(20);
+    }
+  }
+}
+let otaRunning = false;
+function otaShow(text, pct, sub, title){
+  $("otaTitle").textContent = title || (otaRunning ? "韌體升級中" : "韌體升級");
+  $("otaText").textContent = text;
+  if (pct != null) $("otaBar").value = pct;
+  $("otaSub").textContent = sub || "";
+  if (!$("ota").open) $("ota").showModal();
+}
+async function upgradeFirmware(){
+  const fw = FIRMWARES[0];
+  if (radarInfo.prompt !== fw.family || !radarInfo.ver.startsWith("BR7701D-V311")) {
+    await dialog("不能升級", `這台雷達（${radarInfo.ver || "?"}，${radarInfo.prompt || "?"}）不是 3V1 系列，內建的 ${fw.ver} 不適用。刷錯會讓雷達無法開機。`, { cancel: false });
+    return;
+  }
+  const same = radarInfo.ver === fw.ver;
+  if (!await dialog(same ? "已是最新版" : "升級雷達韌體",
+    (same ? `這台雷達已經是 ${fw.ver}。通常不需要重刷，只有升級曾經失敗或按鍵等功能異常時才需要。\n\n` : `目前 ${radarInfo.ver}\n升級為 ${fw.ver}\n\n`) +
+    "升級約需 1～2 分鐘：\n・請先備份設定\n・手機放在雷達旁邊，不要關螢幕、不要切換 App\n・升級中雷達不能斷電\n\n確定開始嗎？",
+    { okText: same ? "仍要重刷" : "開始升級", danger: true })) return;
+
+  busy = true; otaRunning = true; refresh();
+  let lock = null;
+  try { lock = await navigator.wakeLock.request("screen"); } catch (e) {}
+  const rx = new OtaRx();
+  let stage = "下載韌體檔";
+  try {
+    otaShow("準備韌體檔…", 0);
+    const res = await fetch(fw.file, { cache: "no-cache" });
+    if (!res.ok) throw new Error("讀不到韌體檔，請確認手機有網路");
+    const img = new Uint8Array(await res.arrayBuffer());
+    let sum = 0; for (const x of img) sum = (sum + x) >>> 0;
+    if (img.length !== fw.size || sum !== fw.sum) throw new Error("韌體檔內容不對，已停止（沒有動到雷達）");
+    const blocks = Math.ceil(img.length / OTA_BLOCK);
+
+    stage = "進入升級模式";
+    otaShow("讓雷達進入升級模式…", 0);
+    await link.send("BootLoader", { wait: false });
+    link.onRaw = b => rx.push(b);
+    const start = new Uint8Array(24);
+    start.set(new TextEncoder().encode("BR7701D"));
+    start.set([sum >>> 24, (sum >>> 16) & 255, (sum >>> 8) & 255, sum & 255, blocks >> 8, blocks & 255, 0, OTA_BLOCK], 16);
+    let ack = null;
+    for (let i = 0; i < 8 && !ack; i++) {        // the bootloader needs ~3 s after the reboot
+      await link._write(otaFrame(0, start));
+      ack = await rx.wait(f => f.cmd === 0, 3000);
+    }
+    if (!ack) throw new Error("雷達沒有進入升級模式");
+    if (ack.payload[0] !== 0) throw new Error(`雷達拒絕升級（代碼 ${ack.payload[0]}）`);
+
+    stage = "傳送韌體";
+    const t0 = Date.now();
+    for (let n = 0; n < blocks; n++) {
+      const data = img.subarray(n * OTA_BLOCK, Math.min(img.length, (n + 1) * OTA_BLOCK));
+      const pl = new Uint8Array(2 + data.length); pl[0] = n >> 8; pl[1] = n & 255; pl.set(data, 2);
+      let ok = false;
+      for (let tries = 0; tries < 4 && !ok; tries++) {
+        await link._write(otaFrame(1, pl));
+        const a = await rx.wait(f => f.cmd === 1 && ((f.payload[0] << 8) | f.payload[1]) === n, 3000);
+        if (a && a.payload[2] === 0) ok = true;
+        else if (a) throw new Error(`第 ${n + 1} 包被拒絕（代碼 ${a.payload[2]}）`);
+      }
+      if (!ok) throw new Error(`第 ${n + 1} 包沒有回應`);
+      if (n % 5 === 0 || n === blocks - 1) {
+        const left = Math.round((Date.now() - t0) / (n + 1) * (blocks - n - 1) / 1000);
+        otaShow("正在傳送韌體，請不要離開這個畫面…", Math.round((n + 1) / blocks * 100), `${n + 1} / ${blocks} 包，約剩 ${left} 秒`);
+      }
+    }
+
+    stage = "完成升級";
+    otaShow("寫入完成，雷達重新啟動中…", 100);
+    await link._write(otaFrame(2, new Uint8Array([0])));
+    await rx.wait(f => f.cmd === 2, 5000);
+    link.onRaw = null;
+
+    // wait for the new firmware to answer
+    stage = "確認新版本";
+    let ver = "";
+    const end = Date.now() + 60000;
+    await sleep(5000);
+    while (!ver && Date.now() < end) {
+      try {
+        if (!link.connected) await link.open();
+        const r = await link.send("GetSoftwareVersion", { timeout: 3000 });
+        ver = (r.text.match(/VER:(\S+)/) || [])[1] || "";
+      } catch (e) {}
+      if (!ver) await sleep(3000);
+    }
+    if (!ver) throw new Error("升級資料已送完，但雷達還沒回應。請等 1 分鐘後重新連線，看版本號是否已更新");
+    await afterConnect();
+    if (ver !== fw.ver) throw new Error(`雷達回報的版本是 ${ver}，跟預期的 ${fw.ver} 不同`);
+    otaRunning = false;
+    otaShow(`升級成功，目前版本 ${ver}。\n請檢查設定是否正確，並測試雷達本體按鍵。`, 100, "", "升級完成");
+    link.onLog(`[App] 韌體升級完成 ${ver}\n`, false);
+  } catch (e) {
+    link.onRaw = null; otaRunning = false;
+    const inBoot = stage === "傳送韌體" || stage === "進入升級模式" || stage === "完成升級";
+    otaShow(`升級失敗（${stage}）：${e.message}` + (inBoot ? "\n\n雷達可能停在升級模式。請不要斷電，重新連線後再按一次「升級雷達韌體」。如果連不上，把雷達斷電再上電後再試。" : ""), null, "", "升級失敗");
+    link.onLog(`[App] 韌體升級失敗 [${stage}] ${e.message}\n`, false);
+  } finally {
+    link.onRaw = null;
+    if (lock) try { lock.release(); } catch (e) {}
+    otaRunning = false; busy = false; refresh();
+    $("otaClose").classList.remove("hidden");
+  }
+}
+
 // ---------- start ----------
 buildControls();
 $("appVer").textContent = `玄伍科技 79G 雷達設定 App ${APP_VERSION}`;
@@ -829,6 +1000,11 @@ $("btnLearnBg").onclick = () => runLearn("bg");
 $("btnLearnPole").onclick = () => runLearn("pole");
 $("btnLock").onclick = () => setAdvanced(false);
 $("btnReboot").onclick = () => restart("reboot", "重啟雷達", "確定要重啟雷達嗎？");
+$("btnOta").onclick = upgradeFirmware;
+// trial period: the upgrade button only shows when the page is opened with ?ota=1
+if (/[?&]ota=1\b/.test(location.search)) $("otaRow").classList.remove("hidden");
+$("otaClose").onclick = () => { $("ota").close(); $("otaClose").classList.add("hidden"); };
+$("ota").oncancel = e => { if (otaRunning) e.preventDefault(); };
 $("btnReset").onclick = () => restart("ResetRadeConfig", "恢復出廠值",
   "所有設定（桿型、桿長、方向等）和學習資料都會清除，回到出廠值，之後需要重新設定。\n\n確定嗎？");
 try { if (sessionStorage.getItem("adv") === "1") setAdvanced(true); } catch(e){}

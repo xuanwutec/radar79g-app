@@ -260,7 +260,7 @@ dialog input{width:100%;font:inherit;font-size:20px;padding:10px;border-radius:1
 <script>
 "use strict";
 // ===== Settings you may change =====
-const APP_VERSION = "v1.1";          // App 版本號：每次上線改版都要加
+const APP_VERSION = "v1.2";          // App 版本號：每次上線改版都要加
 const INSTALLER_PIN = "8888";        // 安裝人員密碼（進階設定）
 // 已確認可用的韌體版本（GetSoftwareVersion 的 VER:）。其他版本只開放安全的基本功能。
 // 23A_3 實機測過；23A_4 為同系列，以韌體檔比對確認指令與設定格式相同。
@@ -324,16 +324,20 @@ class RadarLink {
     this.chain = p.catch(() => {});
     return p;
   }
+  // Send the whole command in one packet, like the original app (MTU 247). Splitting it into
+  // 20-byte writes without response sometimes lost the 2nd part, so long commands such as
+  // "SimpleCfgCommon 2 2 20" failed now and then. Fall back to small paced chunks only if the
+  // phone refuses the long write.
+  async _write(bytes){
+    const w = b => this.wr.writeValueWithoutResponse ? this.wr.writeValueWithoutResponse(b) : this.wr.writeValue(b);
+    try { await w(bytes); return; } catch (e) { if (bytes.length <= 20) throw e; }
+    for (let i = 0; i < bytes.length; i += 20) { await w(bytes.slice(i, i + 20)); await sleep(40); }
+  }
   async _send(cmd, { timeout = 5000, wait = true } = {}){
     if (!this.connected) throw new Error("尚未連線");
     this.buf = "";
     this.onLog(cmd, true);
-    const bytes = new TextEncoder().encode(cmd + "\n");
-    for (let i = 0; i < bytes.length; i += 20) {
-      const part = bytes.slice(i, i + 20);
-      if (this.wr.writeValueWithoutResponse) await this.wr.writeValueWithoutResponse(part);
-      else await this.wr.writeValue(part);
-    }
+    await this._write(new TextEncoder().encode(cmd + "\n"));
     if (!wait) { await sleep(800); return { ok: true, text: this.buf }; }
     const end = Date.now() + timeout;
     for (;;) {
@@ -561,7 +565,8 @@ async function save(){
   try {
     for (const c of changes) {
       setStatus(`寫入${c.label}…`);
-      const r = await link.send(c.cmd);
+      let r = await link.send(c.cmd);
+      if (!r.ok) { await sleep(300); r = await link.send(c.cmd); }   // one retry
       if (!r.ok) failed.push(c.label);
     }
   } catch (e) { failed.push("通訊錯誤：" + e.message); }

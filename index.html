@@ -208,7 +208,9 @@ dialog input{width:100%;font:inherit;font-size:20px;padding:10px;border-radius:1
           <button id="btnReset" class="btn danger">恢復出廠值</button>
         </div>
       </div>
-      <button id="btnLock" class="btn block" style="margin-top:8px">鎖定進階設定</button>
+      <button id="btnLogout" class="btn primary block" style="margin-top:8px">完成調試並登出</button>
+      <div class="note">鎖回進階設定並中斷藍牙連線，客戶接手時看不到安裝人員功能。</div>
+      <button id="btnLock" class="btn block" style="margin-top:8px">只鎖定進階設定</button>
     </div>
   </section>
 
@@ -273,7 +275,7 @@ dialog input{width:100%;font:inherit;font-size:20px;padding:10px;border-radius:1
 <script>
 "use strict";
 // ===== Settings you may change =====
-const APP_VERSION = "v1.8";          // App 版本號：每次上線改版都要加
+const APP_VERSION = "v1.9";          // App 版本號：每次上線改版都要加
 const INSTALLER_PIN = "8888";        // 安裝人員密碼（進階設定）
 // 已確認可用的韌體版本（GetSoftwareVersion 的 VER:）。其他版本只開放安全的基本功能。
 // 23A_3 實機測過；23A_4 為同系列，以韌體檔比對確認指令與設定格式相同。
@@ -1037,6 +1039,20 @@ $("bkFile").onchange = async e => {
 $("btnLearnBg").onclick = () => runLearn("bg");
 $("btnLearnPole").onclick = () => runLearn("pole");
 $("btnLock").onclick = () => setAdvanced(false);
+// installer is done on site: warn about unsaved edits, lock the installer section, disconnect
+$("btnLogout").onclick = async () => {
+  const changes = current && draft ? diffConfig(current, draft) : [];
+  const msg = (changes.length ? `還有 ${changes.length} 項修改沒有儲存，登出後會放棄：\n` + changes.map(c => "・" + c.label).join("\n") + "\n\n" : "") +
+    "登出後會鎖回進階設定並中斷藍牙連線。\n確定完成調試並登出嗎？";
+  if (!await dialog("完成調試並登出", msg, { okText: "登出", danger: changes.length > 0 })) return;
+  setAdvanced(false);
+  if (link.connected) { userClosing = true; link.close(); }
+  lostLink = false; current = draft = null;
+  $("devInfo").classList.add("hidden"); $("verWarn").classList.add("hidden");
+  setStatus("已登出。下次調試請重新連接並解鎖。");
+  refresh(); window.scrollTo(0, 0);
+  toast("已登出");
+};
 $("btnReboot").onclick = () => restart("reboot", "重啟雷達", "確定要重啟雷達嗎？");
 $("btnOta").onclick = upgradeFirmware;
 $("otaClose").onclick = () => { $("ota").close(); $("otaClose").classList.add("hidden"); };

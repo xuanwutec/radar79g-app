@@ -176,15 +176,15 @@ dialog input{width:100%;font:inherit;font-size:20px;padding:10px;border-radius:1
       </div>
       <div class="row">
         <div class="label">臨近不檢測距離</div>
-        <div class="stepper" data-field="NearCm" data-min="0" data-max="100" data-step="10" data-scale="1" data-dp="0" data-unit=" 公分"></div>
+        <div class="stepper" data-field="NearCm" data-min="10" data-max="100" data-step="10" data-scale="1" data-dp="0" data-unit=" 公分"></div>
       </div>
       <div class="row">
         <div class="label">左側檢測寬度</div>
-        <div class="stepper" data-field="LeftWidthCm" data-min="0" data-max="150" data-step="10" data-scale="1" data-dp="0" data-unit=" 公分"></div>
+        <div class="stepper" data-field="LeftWidthCm" data-min="10" data-max="150" data-step="10" data-scale="1" data-dp="0" data-unit=" 公分"></div>
       </div>
       <div class="row">
         <div class="label">右側檢測寬度</div>
-        <div class="stepper" data-field="RightWidthCm" data-min="0" data-max="150" data-step="10" data-scale="1" data-dp="0" data-unit=" 公分"></div>
+        <div class="stepper" data-field="RightWidthCm" data-min="10" data-max="150" data-step="10" data-scale="1" data-dp="0" data-unit=" 公分"></div>
       </div>
       <div class="row">
         <div class="label">藍牙自動關閉 <span class="hint">開啟後要斷電再上電才連得上</span></div>
@@ -273,7 +273,7 @@ dialog input{width:100%;font:inherit;font-size:20px;padding:10px;border-radius:1
 <script>
 "use strict";
 // ===== Settings you may change =====
-const APP_VERSION = "v1.5";          // App 版本號：每次上線改版都要加
+const APP_VERSION = "v1.6";          // App 版本號：每次上線改版都要加
 const INSTALLER_PIN = "8888";        // 安裝人員密碼（進階設定）
 // 已確認可用的韌體版本（GetSoftwareVersion 的 VER:）。其他版本只開放安全的基本功能。
 // 23A_3 實機測過；23A_4 為同系列，以韌體檔比對確認指令與設定格式相同。

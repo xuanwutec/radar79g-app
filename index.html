@@ -197,7 +197,7 @@ dialog input{width:100%;font:inherit;font-size:20px;padding:10px;border-radius:1
           <button id="btnRestore" class="btn">還原備份</button>
         </div>
       </div>
-      <div class="row hidden" id="otaRow">
+      <div class="row" id="otaRow">
         <div class="label">韌體升級 <span class="hint" id="otaHint">內建 23A_4</span></div>
         <button id="btnOta" class="btn block">升級雷達韌體</button>
       </div>
@@ -273,7 +273,7 @@ dialog input{width:100%;font:inherit;font-size:20px;padding:10px;border-radius:1
 <script>
 "use strict";
 // ===== Settings you may change =====
-const APP_VERSION = "v1.3";          // App 版本號：每次上線改版都要加
+const APP_VERSION = "v1.4";          // App 版本號：每次上線改版都要加
 const INSTALLER_PIN = "8888";        // 安裝人員密碼（進階設定）
 // 已確認可用的韌體版本（GetSoftwareVersion 的 VER:）。其他版本只開放安全的基本功能。
 // 23A_3 實機測過；23A_4 為同系列，以韌體檔比對確認指令與設定格式相同。
@@ -1001,8 +1001,6 @@ $("btnLearnPole").onclick = () => runLearn("pole");
 $("btnLock").onclick = () => setAdvanced(false);
 $("btnReboot").onclick = () => restart("reboot", "重啟雷達", "確定要重啟雷達嗎？");
 $("btnOta").onclick = upgradeFirmware;
-// trial period: the upgrade button only shows when the page is opened with ?ota=1
-if (/[?&]ota=1\b/.test(location.search)) $("otaRow").classList.remove("hidden");
 $("otaClose").onclick = () => { $("ota").close(); $("otaClose").classList.add("hidden"); };
 $("ota").oncancel = e => { if (otaRunning) e.preventDefault(); };
 $("btnReset").onclick = () => restart("ResetRadeConfig", "恢復出廠值",

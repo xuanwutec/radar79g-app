@@ -273,7 +273,7 @@ dialog input{width:100%;font:inherit;font-size:20px;padding:10px;border-radius:1
 <script>
 "use strict";
 // ===== Settings you may change =====
-const APP_VERSION = "v1.6";          // App 版本號：每次上線改版都要加
+const APP_VERSION = "v1.7";          // App 版本號：每次上線改版都要加
 const INSTALLER_PIN = "8888";        // 安裝人員密碼（進階設定）
 // 已確認可用的韌體版本（GetSoftwareVersion 的 VER:）。其他版本只開放安全的基本功能。
 // 23A_3 實機測過；23A_4 為同系列，以韌體檔比對確認指令與設定格式相同。
@@ -478,6 +478,12 @@ function buildControls(){
       r.oninput = () => { if (!draft) return; draft[f] = +r.value; refresh(); };
       st.after(r); st._range = r;
     }
+    // show the allowed range under each stepper
+    const fmt = v => (v / +st.dataset.scale).toFixed(+st.dataset.dp);
+    const rg = document.createElement("div");
+    rg.className = "note range"; rg.style.marginTop = "4px";
+    rg.textContent = `可設範圍：${fmt(min)}～${fmt(max)}${st.dataset.unit}，每次 ${fmt(step)}${st.dataset.unit}`;
+    (st._range || st).after(rg);
   });
 }
 

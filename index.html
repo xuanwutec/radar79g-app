@@ -20,7 +20,7 @@
   --sel:#16191C; --sel-ink:#FFFFFF; --field:#F1F2F0;
   --asphalt:#1B1D20; --paint:#F4F1E8; --dust:#A9AEB4;
   --danger:#D7262E; --danger-soft:#FBE9EA; --ok:#1E7A3C; --warn:#7A5A00; --warn-soft:#FFF6CC;
-  --radius:4px; --r-sm:3px;
+  --radius:4px; --r-sm:3px; --r-btn:10px;
 }
 @media (prefers-color-scheme: dark){
   :root{
@@ -53,23 +53,24 @@ main{max-width:640px;margin:0 auto;padding:0 16px}
 .row .hint{font-size:13px;color:var(--muted);font-weight:400}
 .seg{display:flex;gap:6px;flex-wrap:wrap}
 .seg button{flex:1 1 0;min-width:72px;min-height:44px;border:1px solid var(--line);background:var(--field);color:var(--text);
-  border-radius:var(--r-sm);font:inherit;font-size:15px;cursor:pointer}
+  border-radius:var(--r-btn);font:inherit;font-size:15px;cursor:pointer}
 .seg button[aria-pressed="true"]{background:var(--sel);border-color:var(--sel);color:var(--sel-ink);font-weight:700;box-shadow:inset 0 -3px 0 var(--accent)}
 .stepper{display:flex;align-items:center;gap:10px}
-.stepper button{width:48px;height:44px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--field);color:var(--text);font-size:22px;cursor:pointer}
+.stepper button{width:48px;height:44px;border-radius:var(--r-btn);border:1px solid var(--line);background:var(--field);color:var(--text);font-size:22px;cursor:pointer}
 .stepper .val{min-width:96px;text-align:center;font-family:"Barlow Condensed","Noto Sans TC",sans-serif;font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2}
 input[type=range]{width:100%;accent-color:var(--accent);margin-top:6px}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:52px;padding:0 20px;border-radius:var(--r-sm);
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:52px;padding:0 20px;border-radius:var(--r-btn);
   border:1px solid var(--line);background:var(--card);color:var(--text);font:inherit;font-size:16px;font-weight:700;cursor:pointer;transition:background .15s,border-color .15s}
 .btn:not(:disabled):hover{border-color:var(--text)}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .btn.primary:not(:disabled):hover{background:var(--accent-hover);border-color:var(--accent-hover)}
 .btn.danger{color:var(--danger);border-color:var(--danger)}
 .btn.block{width:100%}
+.btn.loading::before{content:"";width:16px;height:16px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite}
 .btn:disabled,.seg button:disabled,.stepper button:disabled{opacity:.45;cursor:not-allowed}
 .status{font-size:14px;color:var(--muted);margin-top:8px;min-height:1.5em}
 .status.ok{color:var(--ok)} .status.err{color:var(--danger)}
-.linkbtn{display:block;margin:10px auto 0;background:none;border:0;color:var(--text);font:inherit;font-size:14px;font-weight:500;
+.linkbtn{display:block;margin:10px auto 0;background:none;border:0;color:var(--muted);font:inherit;font-size:13px;font-weight:500;
   text-decoration:underline;text-decoration-color:var(--accent);text-decoration-thickness:2px;text-underline-offset:4px;cursor:pointer}
 .btnrow{display:flex;gap:8px;flex-wrap:wrap}
 .btnrow .btn{flex:1 1 140px}
@@ -104,7 +105,7 @@ dialog::backdrop{background:rgba(20,21,24,.6)}
 dialog h3{margin:0 0 8px;font-size:19px;font-weight:900}
 progress{width:100%;height:14px;margin:4px 0 12px;accent-color:var(--accent)}
 dialog p{margin:0 0 16px;white-space:pre-line}
-dialog input{width:100%;font-family:"Barlow Condensed","Noto Sans TC",sans-serif;font-size:24px;padding:10px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--field);color:var(--text);margin-bottom:16px;letter-spacing:4px;text-align:center}
+dialog input{width:100%;font-family:"Barlow Condensed","Noto Sans TC",sans-serif;font-size:24px;padding:10px;border-radius:var(--r-btn);border:1px solid var(--line);background:var(--field);color:var(--text);margin-bottom:16px;letter-spacing:4px;text-align:center}
 dialog input:focus{outline:2px solid var(--accent);outline-offset:1px}
 </style>
 </head>
@@ -126,7 +127,7 @@ dialog input:focus{outline:2px solid var(--accent);outline-offset:1px}
     <div id="connStatus" class="status">請打開手機藍牙，靠近雷達後按「連接雷達」。</div>
     <div id="devInfo" class="note hidden"></div>
     <div id="verWarn" class="banner warn hidden"></div>
-    <button id="btnConnectAll" class="linkbtn" type="button">清單裡找不到雷達？顯示所有藍牙裝置</button>
+    <button id="btnConnectAll" class="linkbtn hidden" type="button">清單裡沒有雷達？改用完整清單搜尋</button>
   </section>
 
   <section class="card" id="basicCard">
@@ -310,13 +311,18 @@ const $ = id => document.getElementById(id);
 class RadarLink {
   constructor(){ this.dev = null; this.wr = null; this.buf = ""; this.wake = null; this.chain = Promise.resolve(); this.ev = ""; this.learnDone = 0; this.onLog = () => {}; this.onDisconnect = () => {}; }
   get connected(){ return !!(this.dev && this.dev.gatt && this.dev.gatt.connected && this.wr); }
+  use(dev){
+    if (this.dev === dev) return;
+    this.dev = dev;
+    dev.addEventListener("gattserverdisconnected", () => { this.wr = null; this.onDisconnect(); });
+  }
   async choose(all = false){
     this.stage = "選擇裝置";
     // "all" lists every nearby device, for browsers/phones where the name filter finds nothing
     this.dev = await navigator.bluetooth.requestDevice(all
       ? { acceptAllDevices: true, optionalServices: [SVC] }
       : { filters: [{ namePrefix: "79G" }, { services: [SVC] }], optionalServices: [SVC] });
-    this.dev.addEventListener("gattserverdisconnected", () => { this.wr = null; this.onDisconnect(); });
+    const d = this.dev; this.dev = null; this.use(d);
   }
   async open(){
     this.stage = "藍牙連線";
@@ -556,36 +562,59 @@ function refresh(){
   $("btnTgt").className = "btn block " + (streaming ? "danger" : "primary");
   $("btnBackup").disabled = $("btnRestore").disabled = !on || busy || !current;
   $("btnLearnBg").disabled = $("btnLearnPole").disabled = !on || busy || !current;
-  $("btnConnect").textContent = on ? "中斷連線" : "連接雷達";
-  $("btnConnect").className = "btn block " + (on ? "" : "primary");
+  $("btnConnect").textContent = connecting ? "連線中…" : on ? "中斷連線" : "連接雷達";
+  $("btnConnect").className = "btn block " + (on ? "" : "primary") + (connecting ? " loading" : "");
   $("btnConnect").disabled = busy;
-  $("btnConnectAll").classList.toggle("hidden", on || !navigator.bluetooth);
+  // the "list every device" fallback only shows where the name filter is known to fail (iPhone/Bluefy)
+  // or after the chooser came back empty-handed, so customers normally never see it
+  $("btnConnectAll").classList.toggle("hidden", on || busy || !navigator.bluetooth || !(IS_IOS || showAllHint));
   const untested = on && !radarInfo.tested;
   $("btnUnlock").disabled = untested;
   if (untested && !$("advPanel").classList.contains("hidden")) setAdvanced(false);
 }
 
 // ---------- actions ----------
+const IS_IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+let connecting = false, showAllHint = false, skipRemembered = false;
+// a radar this phone already allowed: connect to it straight away, without the chooser
+// (needs navigator.bluetooth.getDevices; any failure just falls back to the normal chooser)
+async function rememberedRadar(){
+  if (skipRemembered || !navigator.bluetooth.getDevices) return null;
+  try { return (await navigator.bluetooth.getDevices()).find(d => (d.name || "").startsWith("79G")) || null; } catch (e) { return null; }
+}
+function withTimeout(p, ms){ return Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))]); }
 async function connect(all = false){
   if (link.connected) { userClosing = true; link.close(); current = draft = null; $("devInfo").classList.add("hidden"); $("verWarn").classList.add("hidden"); setStatus("已中斷連線。"); refresh(); return; }
-  busy = true; refresh();
+  busy = true; connecting = true; refresh();
   try {
-    setStatus(all ? "請在清單中選擇雷達（名稱通常是 79G-Radar 開頭，也可能顯示為未命名裝置）…" : "請在跳出的清單選擇雷達（名稱以 79G 開頭）…");
-    // same radar as before: reconnect without the chooser first
     let reused = false;
+    // same radar as before (link dropped): reconnect without the chooser first
     if (link.dev && !all && lostLink) { try { setStatus("重新連線中…"); await link.open(); reused = true; } catch (e) {} }
-    if (!reused) { await link.choose(all); setStatus("連線中…"); await link.open(); }
-    lostLink = false;
+    if (!reused && !all) {
+      const dev = await rememberedRadar();
+      if (dev) {
+        setStatus(`正在連線 ${dev.name}…`);
+        try { link.use(dev); await withTimeout(link.open(), 4000); reused = true; }
+        catch (e) { link.close(); skipRemembered = true; }
+      }
+    }
+    if (!reused) {
+      setStatus(all ? "請在清單中選擇雷達（名稱通常是 79G-Radar 開頭，也可能顯示為未命名裝置）。" : "請在清單中選擇雷達。");
+      await link.choose(all);
+      setStatus(`正在連線 ${link.dev.name || "雷達"}…`);
+      await link.open();
+    }
+    lostLink = false; showAllHint = false;
+    setStatus("正在讀取雷達設定…");
     await afterConnect();
   } catch (e) {
-    if (e && e.name === "NotFoundError") setStatus("沒有選擇雷達。");
-    else {
-      const detail = [e && e.name, e && e.message].filter(Boolean).join(" ") || String(e);
-      setStatus(`連線失敗（${link.stage || "?"}）：${detail}`, "err");
-      link.onLog(`連線失敗 [${link.stage}] ${detail}\n`, false);
-    }
+    const detail = [e && e.name, e && e.message].filter(Boolean).join(" ") || String(e);
+    link.onLog(`連線失敗 [${link.stage}] ${detail}\n`, false);
+    if (e && e.name === "NotFoundError") { setStatus("沒有選擇雷達。"); showAllHint = true; }
+    else if (e && e.name === "SecurityError") setStatus("請再按一次「連接雷達」。");
+    else { setStatus("連不上雷達。請確認雷達有通電、手機靠近雷達，再按一次「連接雷達」。", "err"); showAllHint = true; }
     link.close();
-  } finally { busy = false; refresh(); }
+  } finally { busy = false; connecting = false; refresh(); }
 }
 
 async function afterConnect(){

@@ -127,7 +127,6 @@ dialog input:focus{outline:2px solid var(--accent);outline-offset:1px}
     <div id="connStatus" class="status">請打開手機藍牙，靠近雷達後按「連接雷達」。</div>
     <div id="devInfo" class="note hidden"></div>
     <div id="verWarn" class="banner warn hidden"></div>
-    <button id="btnConnectAll" class="linkbtn hidden" type="button">清單裡沒有雷達？改用完整清單搜尋</button>
   </section>
 
   <section class="card" id="basicCard">
@@ -292,7 +291,7 @@ dialog input:focus{outline:2px solid var(--accent);outline-offset:1px}
 <script>
 "use strict";
 // ===== Settings you may change =====
-const APP_VERSION = "v2.0";          // App 版本號：每次上線改版都要加
+const APP_VERSION = "v2.1";          // App 版本號：每次上線改版都要加
 const INSTALLER_PIN = "8888";        // 安裝人員密碼（進階設定）
 // 已確認可用的韌體版本（GetSoftwareVersion 的 VER:）。其他版本只開放安全的基本功能。
 // 23A_3 實機測過；23A_4 為同系列，以韌體檔比對確認指令與設定格式相同。
@@ -565,54 +564,36 @@ function refresh(){
   $("btnConnect").textContent = connecting ? "連線中…" : on ? "中斷連線" : "連接雷達";
   $("btnConnect").className = "btn block " + (on ? "" : "primary") + (connecting ? " loading" : "");
   $("btnConnect").disabled = busy;
-  // the "list every device" fallback only shows where the name filter is known to fail (iPhone/Bluefy)
-  // or after the chooser came back empty-handed, so customers normally never see it
-  $("btnConnectAll").classList.toggle("hidden", on || busy || !navigator.bluetooth || !(IS_IOS || showAllHint));
   const untested = on && !radarInfo.tested;
   $("btnUnlock").disabled = untested;
   if (untested && !$("advPanel").classList.contains("hidden")) setAdvanced(false);
 }
 
 // ---------- actions ----------
+// iPhone (Bluefy): the name/service filter lists nothing there, so the one button shows every nearby device
 const IS_IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-let connecting = false, showAllHint = false, skipRemembered = false;
-// a radar this phone already allowed: connect to it straight away, without the chooser
-// (needs navigator.bluetooth.getDevices; any failure just falls back to the normal chooser)
-async function rememberedRadar(){
-  if (skipRemembered || !navigator.bluetooth.getDevices) return null;
-  try { return (await navigator.bluetooth.getDevices()).find(d => (d.name || "").startsWith("79G")) || null; } catch (e) { return null; }
-}
-function withTimeout(p, ms){ return Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))]); }
-async function connect(all = false){
+let connecting = false;
+async function connect(){
   if (link.connected) { userClosing = true; link.close(); current = draft = null; $("devInfo").classList.add("hidden"); $("verWarn").classList.add("hidden"); setStatus("已中斷連線。"); refresh(); return; }
   busy = true; connecting = true; refresh();
   try {
     let reused = false;
     // same radar as before (link dropped): reconnect without the chooser first
-    if (link.dev && !all && lostLink) { try { setStatus("重新連線中…"); await link.open(); reused = true; } catch (e) {} }
-    if (!reused && !all) {
-      const dev = await rememberedRadar();
-      if (dev) {
-        setStatus(`正在連線 ${dev.name}…`);
-        try { link.use(dev); await withTimeout(link.open(), 4000); reused = true; }
-        catch (e) { link.close(); skipRemembered = true; }
-      }
-    }
+    if (link.dev && lostLink) { try { setStatus("重新連線中…"); await link.open(); reused = true; } catch (e) {} }
     if (!reused) {
-      setStatus(all ? "請在清單中選擇雷達（名稱通常是 79G-Radar 開頭，也可能顯示為未命名裝置）。" : "請在清單中選擇雷達。");
-      await link.choose(all);
+      setStatus(IS_IOS ? "請在清單中選擇雷達（名稱以 79G-Radar 開頭）。" : "請在清單中選擇雷達。");
+      await link.choose(IS_IOS);
       setStatus(`正在連線 ${link.dev.name || "雷達"}…`);
       await link.open();
     }
-    lostLink = false; showAllHint = false;
+    lostLink = false;
     setStatus("正在讀取雷達設定…");
     await afterConnect();
   } catch (e) {
     const detail = [e && e.name, e && e.message].filter(Boolean).join(" ") || String(e);
     link.onLog(`連線失敗 [${link.stage}] ${detail}\n`, false);
-    if (e && e.name === "NotFoundError") { setStatus("沒有選擇雷達。"); showAllHint = true; }
-    else if (e && e.name === "SecurityError") setStatus("請再按一次「連接雷達」。");
-    else { setStatus("連不上雷達。請確認雷達有通電、手機靠近雷達，再按一次「連接雷達」。", "err"); showAllHint = true; }
+    if (e && e.name === "NotFoundError") setStatus("沒有選擇雷達。");
+    else setStatus("連不上雷達。請確認雷達有通電、手機靠近雷達，再按一次「連接雷達」。", "err");
     link.close();
   } finally { busy = false; connecting = false; refresh(); }
 }
@@ -1065,7 +1046,6 @@ async function upgradeFirmware(){
 buildControls();
 $("appVer").textContent = `玄伍科技 79G 雷達設定 App ${APP_VERSION}`;
 $("btnConnect").onclick = () => connect(false);
-$("btnConnectAll").onclick = () => { if (!link.connected && !busy) connect(true); };
 $("btnRead").onclick = () => readConfig(false);
 $("btnSave").onclick = save;
 $("btnUnlock").onclick = unlock;

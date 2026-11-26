@@ -5,96 +5,113 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>79G 雷達設定</title>
 <meta name="description" content="79G 柵欄機雷達藍牙設定工具">
-<meta name="theme-color" content="#1565c0">
+<meta name="theme-color" content="#1B1D20">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <style>
+/* 玄伍科技官網風格：水泥地淺灰為底、柏油黑頁首、標線黃只用在主要按鈕 */
 :root{
-  --bg:#f3f5f8; --card:#ffffff; --text:#1b1f24; --muted:#5f6b7a; --line:#dde3ea;
-  --accent:#1565c0; --accent-ink:#ffffff; --accent-soft:#e3eefb;
-  --danger:#c62828; --danger-soft:#fdecea; --ok:#2e7d32; --warn:#8a5a00; --warn-soft:#fff4dc;
-  --radius:14px;
+  --bg:#F1F2F0; --card:#FFFFFF; --text:#16191C; --muted:#50565D; --line:#D8DBD9;
+  --accent:#F5C400; --accent-hover:#FFD52E; --accent-ink:#16191C; --accent-soft:#FFF6CC;
+  --sel:#16191C; --sel-ink:#FFFFFF; --field:#F1F2F0;
+  --asphalt:#1B1D20; --paint:#F4F1E8; --dust:#A9AEB4;
+  --danger:#D7262E; --danger-soft:#FBE9EA; --ok:#1E7A3C; --warn:#7A5A00; --warn-soft:#FFF6CC;
+  --radius:4px; --r-sm:3px; --r-btn:10px;
 }
 @media (prefers-color-scheme: dark){
   :root{
-    --bg:#11151a; --card:#1a2028; --text:#e8edf3; --muted:#9aa7b6; --line:#2b3440;
-    --accent:#5aa2f0; --accent-ink:#0b1420; --accent-soft:#1d3047;
-    --danger:#ef6b6b; --danger-soft:#3a1f22; --ok:#6cc070; --warn:#f0c060; --warn-soft:#3a3020;
+    --bg:#141518; --card:#25282C; --text:#F4F1E8; --muted:#A9AEB4; --line:#3A3E44;
+    --accent-soft:#3A3315; --sel:#F4F1E8; --sel-ink:#16191C; --field:#1B1D20;
+    --danger:#F0656B; --danger-soft:#3A1F22; --ok:#5FC27E; --warn:#F5C400; --warn-soft:#332C10;
   }
 }
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--text);
-  font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",system-ui,sans-serif;font-size:16px;line-height:1.5}
+  font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;font-size:16px;line-height:1.6}
 body{padding-bottom:96px}
-header{display:flex;align-items:center;gap:12px;padding:16px 16px 8px;max-width:640px;margin:0 auto}
-header img{height:48px;width:auto;display:block}
-.brand{font-size:13px;color:var(--muted);letter-spacing:2px}
-header h1{font-size:20px;margin:0;font-weight:700;line-height:1.3}
+header{display:flex;align-items:center;gap:12px;background:var(--asphalt);color:var(--paint);
+  padding:14px max(16px,calc((100% - 608px)/2)) 14px;position:relative;margin-bottom:22px}
+header::after{content:"";position:absolute;left:0;right:0;bottom:-8px;height:8px;
+  background:repeating-linear-gradient(-45deg,var(--accent) 0 10px,var(--asphalt) 10px 20px)}
+header img{height:44px;width:auto;display:block}
+.brand{font-size:13px;color:var(--dust);letter-spacing:2px}
+header h1{font-size:21px;margin:0;font-weight:900;line-height:1.3;color:var(--paint)}
 main{max-width:640px;margin:0 auto;padding:0 16px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin:12px 0}
-.card h2{font-size:16px;margin:0 0 12px;font-weight:700}
-.banner{border-radius:var(--radius);padding:12px 14px;margin:12px 0;font-size:15px}
+.card h2{font-size:18px;margin:0 0 12px;font-weight:900;display:flex;align-items:center;gap:8px}
+.card h2::before{content:"";width:10px;height:10px;background:var(--accent);flex:none}
+.banner{border-radius:var(--r-sm);padding:12px 14px;margin:12px 0;font-size:15px;border-left:4px solid currentColor}
 .banner.warn{background:var(--warn-soft);color:var(--warn)}
 .banner.danger{background:var(--danger-soft);color:var(--danger)}
 .row{padding:12px 0;border-top:1px solid var(--line)}
 .row:first-of-type{border-top:0;padding-top:0}
-.row .label{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px;font-weight:600}
+.row .label{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px;font-weight:700}
 .row .hint{font-size:13px;color:var(--muted);font-weight:400}
 .seg{display:flex;gap:6px;flex-wrap:wrap}
-.seg button{flex:1 1 0;min-width:72px;min-height:44px;border:1px solid var(--line);background:var(--bg);color:var(--text);
-  border-radius:10px;font:inherit;font-size:15px;cursor:pointer}
-.seg button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:700}
+.seg button{flex:1 1 0;min-width:72px;min-height:44px;border:1px solid var(--line);background:var(--field);color:var(--text);
+  border-radius:var(--r-btn);font:inherit;font-size:15px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--sel);border-color:var(--sel);color:var(--sel-ink);font-weight:700;box-shadow:inset 0 -3px 0 var(--accent)}
 .stepper{display:flex;align-items:center;gap:10px}
-.stepper button{width:48px;height:44px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text);font-size:22px;cursor:pointer}
-.stepper .val{min-width:96px;text-align:center;font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+.stepper button{width:48px;height:44px;border-radius:var(--r-btn);border:1px solid var(--line);background:var(--field);color:var(--text);font-size:22px;cursor:pointer}
+.stepper .val{min-width:96px;text-align:center;font-family:"Barlow Condensed","Noto Sans TC",sans-serif;font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2}
 input[type=range]{width:100%;accent-color:var(--accent);margin-top:6px}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:48px;padding:0 18px;border-radius:12px;
-  border:1px solid var(--line);background:var(--card);color:var(--text);font:inherit;font-weight:600;cursor:pointer}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:52px;padding:0 20px;border-radius:var(--r-btn);
+  border:1px solid var(--line);background:var(--card);color:var(--text);font:inherit;font-size:16px;font-weight:700;cursor:pointer;transition:background .15s,border-color .15s}
+.btn:not(:disabled):hover{border-color:var(--text)}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:not(:disabled):hover{background:var(--accent-hover);border-color:var(--accent-hover)}
 .btn.danger{color:var(--danger);border-color:var(--danger)}
 .btn.block{width:100%}
+.btn.loading::before{content:"";width:16px;height:16px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite}
 .btn:disabled,.seg button:disabled,.stepper button:disabled{opacity:.45;cursor:not-allowed}
 .status{font-size:14px;color:var(--muted);margin-top:8px;min-height:1.5em}
 .status.ok{color:var(--ok)} .status.err{color:var(--danger)}
-.linkbtn{display:block;margin:10px auto 0;background:none;border:0;color:var(--accent);font:inherit;font-size:14px;text-decoration:underline;cursor:pointer}
+.linkbtn{display:block;margin:10px auto 0;background:none;border:0;color:var(--muted);font:inherit;font-size:13px;font-weight:500;
+  text-decoration:underline;text-decoration-color:var(--accent);text-decoration-thickness:2px;text-underline-offset:4px;cursor:pointer}
 .btnrow{display:flex;gap:8px;flex-wrap:wrap}
 .btnrow .btn{flex:1 1 140px}
-.bar{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--asphalt);border-top:3px solid var(--accent);
   padding:10px 16px calc(10px + env(safe-area-inset-bottom))}
 .bar .inner{max-width:640px;margin:0 auto;display:flex;gap:8px}
 .bar .btn{flex:1}
+.bar .btn:not(.primary){background:transparent;color:var(--paint);border-color:#5B6066}
+.bar .btn:not(.primary):not(:disabled):hover{border-color:var(--paint)}
 details{margin:12px 0}
 summary{cursor:pointer;color:var(--muted);font-size:14px}
-pre{white-space:pre-wrap;word-break:break-all;font-size:12px;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px;max-height:260px;overflow:auto}
+pre{white-space:pre-wrap;word-break:break-all;font-size:12px;background:var(--field);border:1px solid var(--line);border-radius:var(--r-sm);padding:10px;max-height:260px;overflow:auto}
 .hidden{display:none!important}
-.toast{position:fixed;left:50%;bottom:92px;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:10px 16px;border-radius:10px;
+.toast{position:fixed;left:50%;bottom:92px;transform:translateX(-50%);background:var(--asphalt);color:var(--paint);border-left:4px solid var(--accent);padding:10px 16px;border-radius:var(--r-sm);
   font-size:15px;max-width:calc(100% - 32px);z-index:10;opacity:0;transition:opacity .2s;pointer-events:none}
 .toast.show{opacity:1}
 .note{font-size:13px;color:var(--muted);margin-top:8px}
-dialog{border:0;border-radius:var(--radius);background:var(--card);color:var(--text);padding:20px;width:min(360px,calc(100% - 32px))}
-dialog::backdrop{background:rgba(0,0,0,.45)}
-#tgt{display:block;width:100%;aspect-ratio:5/6;margin:8px 0;border-radius:10px;background:var(--bg)}
+dialog{border:0;border-top:4px solid var(--accent);border-radius:var(--radius);background:var(--card);color:var(--text);padding:20px;width:min(360px,calc(100% - 32px))}
+dialog::backdrop{background:rgba(20,21,24,.6)}
+#tgt{display:block;width:100%;aspect-ratio:5/6;margin:8px 0;border-radius:var(--r-sm);background:var(--field)}
 #bkList{max-height:50vh;overflow:auto}
-.bk-item{border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:8px}
+.bk-item{border:1px solid var(--line);border-radius:var(--r-sm);padding:10px;margin-bottom:8px}
 .bk-item .t{font-weight:700}
 .bk-item .d{font-size:13px;color:var(--muted);margin:2px 0 8px}
-.bk-item .btnrow .btn{flex:1 1 80px;padding:8px}
+.bk-item .btnrow .btn{flex:1 1 80px;padding:8px;min-height:44px}
 #lrn{text-align:center}
 #lrn svg{width:150px;height:110px;margin:4px auto 8px;display:block}
 #lrn .gate-box{fill:var(--muted)}
 #lrn .gate-boom{stroke:var(--danger);stroke-width:6;stroke-linecap:round;stroke-dasharray:10 8}
 .spinner{width:28px;height:28px;margin:0 auto 14px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-dialog h3{margin:0 0 8px;font-size:18px}
+dialog h3{margin:0 0 8px;font-size:19px;font-weight:900}
 progress{width:100%;height:14px;margin:4px 0 12px;accent-color:var(--accent)}
 dialog p{margin:0 0 16px;white-space:pre-line}
-dialog input{width:100%;font:inherit;font-size:20px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text);margin-bottom:16px;letter-spacing:4px;text-align:center}
+dialog input{width:100%;font-family:"Barlow Condensed","Noto Sans TC",sans-serif;font-size:24px;padding:10px;border-radius:var(--r-btn);border:1px solid var(--line);background:var(--field);color:var(--text);margin-bottom:16px;letter-spacing:4px;text-align:center}
+dialog input:focus{outline:2px solid var(--accent);outline-offset:1px}
 </style>
 </head>
 <body>
 <header>
-  <picture id="logo"><source srcset="logo-dark.png" media="(prefers-color-scheme: dark)"><img src="logo.png" alt="玄伍科技"></picture>
+  <picture id="logo"><img src="logo-dark.png" alt="玄伍科技"></picture>
   <div><h1>79G 雷達設定</h1><div class="brand">玄伍科技</div></div>
 </header>
 <main>
@@ -110,7 +127,7 @@ dialog input{width:100%;font:inherit;font-size:20px;padding:10px;border-radius:1
     <div id="connStatus" class="status">請打開手機藍牙，靠近雷達後按「連接雷達」。</div>
     <div id="devInfo" class="note hidden"></div>
     <div id="verWarn" class="banner warn hidden"></div>
-    <button id="btnConnectAll" class="linkbtn" type="button">清單裡找不到雷達？顯示所有藍牙裝置</button>
+    <button id="btnConnectAll" class="linkbtn hidden" type="button">清單裡沒有雷達？改用完整清單搜尋</button>
   </section>
 
   <section class="card" id="basicCard">
@@ -275,7 +292,7 @@ dialog input{width:100%;font:inherit;font-size:20px;padding:10px;border-radius:1
 <script>
 "use strict";
 // ===== Settings you may change =====
-const APP_VERSION = "v1.9";          // App 版本號：每次上線改版都要加
+const APP_VERSION = "v2.0";          // App 版本號：每次上線改版都要加
 const INSTALLER_PIN = "8888";        // 安裝人員密碼（進階設定）
 // 已確認可用的韌體版本（GetSoftwareVersion 的 VER:）。其他版本只開放安全的基本功能。
 // 23A_3 實機測過；23A_4 為同系列，以韌體檔比對確認指令與設定格式相同。
@@ -294,13 +311,18 @@ const $ = id => document.getElementById(id);
 class RadarLink {
   constructor(){ this.dev = null; this.wr = null; this.buf = ""; this.wake = null; this.chain = Promise.resolve(); this.ev = ""; this.learnDone = 0; this.onLog = () => {}; this.onDisconnect = () => {}; }
   get connected(){ return !!(this.dev && this.dev.gatt && this.dev.gatt.connected && this.wr); }
+  use(dev){
+    if (this.dev === dev) return;
+    this.dev = dev;
+    dev.addEventListener("gattserverdisconnected", () => { this.wr = null; this.onDisconnect(); });
+  }
   async choose(all = false){
     this.stage = "選擇裝置";
     // "all" lists every nearby device, for browsers/phones where the name filter finds nothing
     this.dev = await navigator.bluetooth.requestDevice(all
       ? { acceptAllDevices: true, optionalServices: [SVC] }
       : { filters: [{ namePrefix: "79G" }, { services: [SVC] }], optionalServices: [SVC] });
-    this.dev.addEventListener("gattserverdisconnected", () => { this.wr = null; this.onDisconnect(); });
+    const d = this.dev; this.dev = null; this.use(d);
   }
   async open(){
     this.stage = "藍牙連線";
@@ -540,36 +562,59 @@ function refresh(){
   $("btnTgt").className = "btn block " + (streaming ? "danger" : "primary");
   $("btnBackup").disabled = $("btnRestore").disabled = !on || busy || !current;
   $("btnLearnBg").disabled = $("btnLearnPole").disabled = !on || busy || !current;
-  $("btnConnect").textContent = on ? "中斷連線" : "連接雷達";
-  $("btnConnect").className = "btn block " + (on ? "" : "primary");
+  $("btnConnect").textContent = connecting ? "連線中…" : on ? "中斷連線" : "連接雷達";
+  $("btnConnect").className = "btn block " + (on ? "" : "primary") + (connecting ? " loading" : "");
   $("btnConnect").disabled = busy;
-  $("btnConnectAll").classList.toggle("hidden", on || !navigator.bluetooth);
+  // the "list every device" fallback only shows where the name filter is known to fail (iPhone/Bluefy)
+  // or after the chooser came back empty-handed, so customers normally never see it
+  $("btnConnectAll").classList.toggle("hidden", on || busy || !navigator.bluetooth || !(IS_IOS || showAllHint));
   const untested = on && !radarInfo.tested;
   $("btnUnlock").disabled = untested;
   if (untested && !$("advPanel").classList.contains("hidden")) setAdvanced(false);
 }
 
 // ---------- actions ----------
+const IS_IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+let connecting = false, showAllHint = false, skipRemembered = false;
+// a radar this phone already allowed: connect to it straight away, without the chooser
+// (needs navigator.bluetooth.getDevices; any failure just falls back to the normal chooser)
+async function rememberedRadar(){
+  if (skipRemembered || !navigator.bluetooth.getDevices) return null;
+  try { return (await navigator.bluetooth.getDevices()).find(d => (d.name || "").startsWith("79G")) || null; } catch (e) { return null; }
+}
+function withTimeout(p, ms){ return Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))]); }
 async function connect(all = false){
   if (link.connected) { userClosing = true; link.close(); current = draft = null; $("devInfo").classList.add("hidden"); $("verWarn").classList.add("hidden"); setStatus("已中斷連線。"); refresh(); return; }
-  busy = true; refresh();
+  busy = true; connecting = true; refresh();
   try {
-    setStatus(all ? "請在清單中選擇雷達（名稱通常是 79G-Radar 開頭，也可能顯示為未命名裝置）…" : "請在跳出的清單選擇雷達（名稱以 79G 開頭）…");
-    // same radar as before: reconnect without the chooser first
     let reused = false;
+    // same radar as before (link dropped): reconnect without the chooser first
     if (link.dev && !all && lostLink) { try { setStatus("重新連線中…"); await link.open(); reused = true; } catch (e) {} }
-    if (!reused) { await link.choose(all); setStatus("連線中…"); await link.open(); }
-    lostLink = false;
+    if (!reused && !all) {
+      const dev = await rememberedRadar();
+      if (dev) {
+        setStatus(`正在連線 ${dev.name}…`);
+        try { link.use(dev); await withTimeout(link.open(), 4000); reused = true; }
+        catch (e) { link.close(); skipRemembered = true; }
+      }
+    }
+    if (!reused) {
+      setStatus(all ? "請在清單中選擇雷達（名稱通常是 79G-Radar 開頭，也可能顯示為未命名裝置）。" : "請在清單中選擇雷達。");
+      await link.choose(all);
+      setStatus(`正在連線 ${link.dev.name || "雷達"}…`);
+      await link.open();
+    }
+    lostLink = false; showAllHint = false;
+    setStatus("正在讀取雷達設定…");
     await afterConnect();
   } catch (e) {
-    if (e && e.name === "NotFoundError") setStatus("沒有選擇雷達。");
-    else {
-      const detail = [e && e.name, e && e.message].filter(Boolean).join(" ") || String(e);
-      setStatus(`連線失敗（${link.stage || "?"}）：${detail}`, "err");
-      link.onLog(`連線失敗 [${link.stage}] ${detail}\n`, false);
-    }
+    const detail = [e && e.name, e && e.message].filter(Boolean).join(" ") || String(e);
+    link.onLog(`連線失敗 [${link.stage}] ${detail}\n`, false);
+    if (e && e.name === "NotFoundError") { setStatus("沒有選擇雷達。"); showAllHint = true; }
+    else if (e && e.name === "SecurityError") setStatus("請再按一次「連接雷達」。");
+    else { setStatus("連不上雷達。請確認雷達有通電、手機靠近雷達，再按一次「連接雷達」。", "err"); showAllHint = true; }
     link.close();
-  } finally { busy = false; refresh(); }
+  } finally { busy = false; connecting = false; refresh(); }
 }
 
 async function afterConnect(){
